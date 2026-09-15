@@ -6,10 +6,12 @@ from supabase import Client, create_client
 
 load_dotenv()
 
-supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_PUBLISHABLE_KEY")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_PUBLISHABLE_KEY = os.getenv("SUPABASE_PUBLISHABLE_KEY")
 
-if not supabase_url or not supabase_key:
+if not SUPABASE_URL or not SUPABASE_PUBLISHABLE_KEY:
     raise ValueError("Supabase environment variables are missing.")
 
-supabase: Client = create_client(supabase_url, supabase_key)
+
+def create_supabase_client() -> Client:
+    return create_client(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
