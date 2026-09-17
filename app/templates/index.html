@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ConnectSphere — Event Planning & Venue Booking</title>
+  <meta name="description" content="A role-based prototype for planning events, booking venues and coordinating teams." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23783A32'/%3E%3Cpath d='M18 22h28v24H18z' fill='%23FFFDF9'/%3E%3Cpath d='M24 16v12M40 16v12M18 30h28' stroke='%23783A32' stroke-width='4'/%3E%3Ccircle cx='26' cy='37' r='3' fill='%23783A32'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" onclick="showLanding();return false"><span class="brand-mark">C</span>ConnectSphere</a>
+    <nav class="topnav"><a href="#events">Explore events</a><a href="#venues">Venues</a><a href="#about">How it works</a><button class="btn btn-primary btn-small" onclick="enterApp('organiser')">Open prototype</button></nav>
+  </header>
+
+  <div id="landing">
+    <section class="hero">
+      <div><div class="eyebrow">One connected event workspace</div><h1>Plan events.<br/>Book venues.<br/><em>Bring people together.</em></h1><p class="hero-copy">From the first idea to event day, ConnectSphere keeps organisers, coordinators, venue teams and attendees in sync.</p><div class="hero-actions"><button class="btn btn-primary" onclick="enterApp('organiser')">Plan an event</button><button class="btn btn-outline" onclick="document.getElementById('events').scrollIntoView()">Explore events</button></div><div class="trust-row"><span>Live booking status</span><span>One shared timeline</span><span>Role-based views</span></div></div>
+      <div class="hero-visual" aria-label="Event planning preview">
+        <div class="visual-card main"><div class="calendar-head"><div><span class="muted">Event calendar</span><h3>September 2026</h3></div><button class="btn btn-soft btn-small">+ New event</button></div><div class="mini-month" id="calendar"></div><div class="event-strip"><div class="date-tile"><small>SEP</small>24</div><div><strong>SMU Innovators Night</strong><div class="muted">The Alcove · 6:30 PM</div></div></div></div>
+        <div class="visual-card floating"><span class="muted">Team readiness</span><strong>6 of 8 tasks completed</strong><div class="progress"><span style="width:75%"></span></div><div class="avatar-row"><div class="avatar">AW</div><div class="avatar">KY</div><div class="avatar">WM</div><div class="avatar">+2</div></div></div>
+        <div class="visual-card alert"><span class="muted">Venue confirmed</span><strong>The Alcove</strong><span class="status confirmed">Ready for setup</span></div>
+      </div>
+    </section>
+    <section class="section" id="events"><div class="section-heading"><div><div class="eyebrow">Discover what’s happening</div><h2>Upcoming events</h2></div><button class="text-link" onclick="enterApp('attendee')">View all events →</button></div><div class="event-grid" id="publicEvents"></div></section>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="role-box"><label>Viewing as</label><select id="roleSelect" onchange="setRole(this.value)"><option value="organiser">Organiser</option><option value="coordinator">Event Coordinator</option><option value="venue">Venue Staff</option><option value="technical">Technical Staff</option><option value="attendee">Attendee</option></select></div>
+      <nav class="side-nav" id="sideNav"></nav>
+      <div class="side-bottom"><div class="user-chip"><div class="user-avatar" id="userInitial">AW</div><div><strong id="userName">Ai Wei</strong><small id="userRole">Organiser</small></div></div></div>
+    </aside>
+    <main class="main" id="mainContent"></main>
+  </div>
+
+  <div class="modal" id="eventModal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><div class="modal-top"><div><div class="eyebrow">Event details</div><h2 id="modalTitle">Event</h2></div><button class="close" onclick="closeModal()">×</button></div><p class="muted" id="modalMeta" style="margin:16px 0"></p><p id="modalDesc"></p><div class="notice"><strong>Registration is open</strong><span class="muted">You’ll receive a confirmation immediately.</span></div><button class="btn btn-primary" style="width:100%;margin-top:18px" onclick="toast('You’re registered! Confirmation sent.');closeModal()">Register now</button></div></div>
+  <div class="toast" id="toast"></div>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
