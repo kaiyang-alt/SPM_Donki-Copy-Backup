@@ -7,4 +7,5 @@ def test_home_page():
     response = client.get("/")
 
     assert response.status_code == 200
-    assert b"ConnectSphere is running!" in response.data
+    assert b"ConnectSphere" in response.data
+    assert b"Plan events." in response.data
