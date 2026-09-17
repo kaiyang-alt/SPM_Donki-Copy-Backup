@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 
 from app.supabase_client import create_supabase_client
 
@@ -8,7 +8,7 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "ConnectSphere is running!"
+    return render_template("index.html")
 
 
 @app.route("/auth/login", methods=["POST"])
@@ -39,7 +39,7 @@ def login():
                 "access_token": response.session.access_token,
             }
         ), 200
-
+    
     except Exception:
         return jsonify({"error": "Invalid email or password."}), 401
 
