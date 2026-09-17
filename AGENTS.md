@@ -1,11 +1,27 @@
 # ConnectSphere Development Instructions
 
+## Required Context Before Implementation
+
+Before implementing any user story, review:
+
+1. `README.md`
+2. `docs/architecture/project_context.md`
+3. The relevant file under `docs/user-stories/`
+4. Relevant UML under `docs/uml/`, if applicable
+
+Use `AGENTS.md` as the development rules for implementation.
+
+Do not rely on the frontend prototype alone for business rules. Where prototype behaviour conflicts with confirmed requirements, follow the confirmed requirements and shared project context.
+
 ## Shared Frontend
 
 - Use the existing ConnectSphere frontend as the shared UI baseline.
 - Do not redesign the application or introduce a separate design system.
 - Reuse the existing layout, navigation, styling and interaction patterns.
 - Replace prototype/mock behaviour only when implementing the relevant user story.
+- Treat `app/templates/index.html`, `app/static/css/styles.css` and `app/static/js/app.js` as shared baseline files.
+- Do not replace or restructure these files wholesale for an individual story.
+- Keep story-specific changes as isolated as practical and coordinate before making large changes to shared frontend files.
 
 ## Backend Structure
 
