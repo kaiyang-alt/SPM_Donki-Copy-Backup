@@ -64,6 +64,46 @@ SPM_Donki/
 │   ├── architecture/
 │   │   ├── common_structure.md
 │   │   └── project_context.md
+│   │
+│   ├── user-stories/
+│   │   ├── README.md
+│   │   └── <story-name>.md
+│   │
+│   ├── test-cases/
+│   │   ├── README.md
+│   │   ├── functional-test-case-prompt.md
+│   │   └── <story-name>.md
+│   │
+│   ├── implementation/
+│   │   └── user-story-implementation-prompt.md
+│   │
+│   └── uml/
+│       ├── README.md
+│       └── <story-diagram>.md
+│
+├── tests/
+├── .github/
+├── .env.example
+├── .gitignore
+├── AGENTS.md
+├── README.md
+└── requirements.txt
+
+```text
+SPM_Donki/
+│
+├── app/
+│   ├── app.py
+│   ├── supabase_client.py
+│   ├── routes/
+│   ├── services/
+│   ├── templates/
+│   └── static/
+│
+├── docs/
+│   ├── architecture/
+│   │   ├── common_structure.md
+│   │   └── project_context.md
 │   ├── uml/
 │   └── user-stories/
 │
@@ -248,19 +288,76 @@ Sequence diagrams are useful where interaction order or alternative flows matter
 
 Class diagrams may be used where code-level structure needs clarification.
 
-## AI Coding Context
+## Shared AI Prompts
 
-When using an AI coding assistant, provide:
+ConnectSphere uses two shared AI prompts to keep development consistent across the team.
+
+### Functional Test Case Design
+
+Use:
 
 ```text
-1. README.md
-2. AGENTS.md
-3. docs/architecture/project_context.md
-4. docs/user-stories/<relevant-story>.md
-5. Relevant UML, if applicable
+docs/test-cases/functional-test-case-prompt.md
 ```
 
-Different team members may use different AI tools, but all AI agents should receive the same shared project context.
+This prompt is used before implementation to derive functional test cases from the approved user story, acceptance criteria and relevant customer clarifications.
+
+The completed functional test specification should be stored under:
+
+```text
+docs/test-cases/<story-name>.md
+```
+
+### User Story Implementation
+
+Use:
+
+```text
+docs/implementation/user-story-implementation-prompt.md
+```
+
+This prompt is used after the story requirements and functional test cases have been reviewed.
+
+It instructs the AI to implement only the assigned user story while following the existing ConnectSphere architecture, database, RLS, authentication and frontend rules.
+
+## AI Coding Context
+
+Different team members may use different AI coding tools, but all AI agents should receive the same shared project context.
+
+### Test-Design Stage
+
+Provide:
+
+```text
+README.md
+AGENTS.md
+docs/architecture/project_context.md
+docs/user-stories/<relevant-story>.md
+docs/test-cases/functional-test-case-prompt.md
+Relevant UML, if applicable
+```
+
+The generated functional test specification should be reviewed by a human and stored in:
+
+```text
+docs/test-cases/<relevant-story>.md
+```
+
+### Implementation Stage
+
+Provide:
+
+```text
+README.md
+AGENTS.md
+docs/architecture/project_context.md
+docs/implementation/user-story-implementation-prompt.md
+docs/user-stories/<relevant-story>.md
+docs/test-cases/<relevant-story>.md
+Relevant UML, if applicable
+```
+
+The AI should implement only the assigned story and follow the shared ConnectSphere development rules.
 
 ## Security
 
