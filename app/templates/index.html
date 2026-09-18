@@ -12,12 +12,12 @@
 <body>
   <header class="topbar">
     <a class="brand" href="#" onclick="showLanding();return false"><span class="brand-mark">C</span>ConnectSphere</a>
-    <nav class="topnav"><a href="#events">Explore events</a><a href="#venues">Venues</a><a href="#about">How it works</a><button class="btn btn-primary btn-small" onclick="enterApp('organiser')">Open prototype</button></nav>
+    <nav class="topnav"><a href="#events">Explore events</a><a href="#venues">Venues</a><a href="#about">How it works</a><button class="btn btn-primary btn-small" onclick="showLogin()">Log in</button></nav>
   </header>
 
   <div id="landing">
     <section class="hero">
-      <div><div class="eyebrow">One connected event workspace</div><h1>Plan events.<br/>Book venues.<br/><em>Bring people together.</em></h1><p class="hero-copy">From the first idea to event day, ConnectSphere keeps organisers, coordinators, venue teams and attendees in sync.</p><div class="hero-actions"><button class="btn btn-primary" onclick="enterApp('organiser')">Plan an event</button><button class="btn btn-outline" onclick="document.getElementById('events').scrollIntoView()">Explore events</button></div><div class="trust-row"><span>Live booking status</span><span>One shared timeline</span><span>Role-based views</span></div></div>
+      <div><div class="eyebrow">One connected event workspace</div><h1>Plan events.<br/>Book venues.<br/><em>Bring people together.</em></h1><p class="hero-copy">From the first idea to event day, ConnectSphere keeps organisers, coordinators, venue teams and attendees in sync.</p><div class="hero-actions"><button class="btn btn-primary" onclick="showLogin()">Plan an event</button><button class="btn btn-outline" onclick="document.getElementById('events').scrollIntoView()">Explore events</button></div><div class="trust-row"><span>Live booking status</span><span>One shared timeline</span><span>Role-based views</span></div></div>
       <div class="hero-visual" aria-label="Event planning preview">
         <div class="visual-card main"><div class="calendar-head"><div><span class="muted">Event calendar</span><h3>September 2026</h3></div><button class="btn btn-soft btn-small">+ New event</button></div><div class="mini-month" id="calendar"></div><div class="event-strip"><div class="date-tile"><small>SEP</small>24</div><div><strong>SMU Innovators Night</strong><div class="muted">The Alcove · 6:30 PM</div></div></div></div>
         <div class="visual-card floating"><span class="muted">Team readiness</span><strong>6 of 8 tasks completed</strong><div class="progress"><span style="width:75%"></span></div><div class="avatar-row"><div class="avatar">AW</div><div class="avatar">KY</div><div class="avatar">WM</div><div class="avatar">+2</div></div></div>
@@ -29,11 +29,23 @@
 
   <div id="app" class="app hidden">
     <aside class="sidebar">
-      <div class="role-box"><label>Viewing as</label><select id="roleSelect" onchange="setRole(this.value)"><option value="organiser">Organiser</option><option value="coordinator">Event Coordinator</option><option value="venue">Venue Staff</option><option value="technical">Technical Staff</option><option value="attendee">Attendee</option></select></div>
+      <div class="role-box"><label for="roleSelect">Viewing as</label><select id="roleSelect" onchange="selectRole(this.value)"><option value="organiser">Event Organiser</option><option value="coordinator">Event Coordinator (Demo)</option><option value="venue">Venue Staff (Demo)</option><option value="technical">Technical Staff (Demo)</option><option value="attendee">Attendee (Demo)</option></select></div>
       <nav class="side-nav" id="sideNav"></nav>
-      <div class="side-bottom"><div class="user-chip"><div class="user-avatar" id="userInitial">AW</div><div><strong id="userName">Ai Wei</strong><small id="userRole">Organiser</small></div></div></div>
+      <div class="side-bottom"><div class="user-chip"><div class="user-avatar" id="userInitial">EO</div><div><strong id="userName">Event Organiser</strong><small id="userRole">Organiser</small></div></div><button class="btn btn-outline logout-button" id="logoutButton" onclick="logout()">Log out</button></div>
     </aside>
     <main class="main" id="mainContent"></main>
+  </div>
+
+  <div class="modal" id="loginModal" onclick="if(event.target===this)closeLogin()">
+    <div class="modal-card auth-card">
+      <div class="modal-top"><div><div class="eyebrow">Secure access</div><h2>Event Organiser login</h2></div><button class="close" type="button" onclick="closeLogin()" aria-label="Close login">×</button></div>
+      <form id="loginForm" class="auth-form">
+        <div class="field"><label for="loginEmail">Email</label><input id="loginEmail" name="email" type="email" autocomplete="username" required></div>
+        <div class="field"><label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required></div>
+        <p class="form-error" id="loginError" role="alert" aria-live="polite"></p>
+        <button class="btn btn-primary" id="loginButton" type="submit">Log in</button>
+      </form>
+    </div>
   </div>
 
   <div class="modal" id="eventModal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><div class="modal-top"><div><div class="eyebrow">Event details</div><h2 id="modalTitle">Event</h2></div><button class="close" onclick="closeModal()">×</button></div><p class="muted" id="modalMeta" style="margin:16px 0"></p><p id="modalDesc"></p><div class="notice"><strong>Registration is open</strong><span class="muted">You’ll receive a confirmation immediately.</span></div><button class="btn btn-primary" style="width:100%;margin-top:18px" onclick="toast('You’re registered! Confirmation sent.');closeModal()">Register now</button></div></div>

@@ -1,47 +1,17 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, render_template
 
-from app.supabase_client import create_supabase_client
+from app.routes.auth import auth_blueprint
+from app.routes.events import events_blueprint
 
 
 app = Flask(__name__)
+app.register_blueprint(auth_blueprint)
+app.register_blueprint(events_blueprint)
 
 
 @app.route("/")
 def home():
     return render_template("index.html")
-
-
-@app.route("/auth/login", methods=["POST"])
-def login():
-    data = request.get_json()
-
-    email = data.get("email")
-    password = data.get("password")
-
-    if not email or not password:
-        return jsonify({"error": "Email and password are required."}), 400
-
-    try:
-        supabase = create_supabase_client()
-
-        response = supabase.auth.sign_in_with_password(
-            {
-                "email": email,
-                "password": password,
-            }
-        )
-
-        return jsonify(
-            {
-                "message": "Login successful.",
-                "user_id": response.user.id,
-                "email": response.user.email,
-                "access_token": response.session.access_token,
-            }
-        ), 200
-    
-    except Exception:
-        return jsonify({"error": "Invalid email or password."}), 401
 
 
 if __name__ == "__main__":
