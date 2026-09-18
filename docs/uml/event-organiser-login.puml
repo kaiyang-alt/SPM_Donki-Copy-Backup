@@ -1,0 +1,92 @@
+@startuml
+title Secure Access to Event Organiser Account
+
+actor "Event Organiser" as Organiser
+boundary "Login Page" as LoginUI
+control "Flask Auth Route" as AuthRoute
+control "Supabase Client" as SupabaseClient
+database "Supabase Auth" as SupabaseAuth
+boundary "Organiser Interface" as OrganiserUI
+control "Event Route / Service" as EventService
+database "Supabase Database\nwith RLS" as Database
+
+== Login ==
+
+Organiser -> LoginUI: Enter email and password
+LoginUI -> AuthRoute: Submit login credentials
+AuthRoute -> SupabaseClient: create_supabase_client()
+SupabaseClient -> SupabaseAuth: sign_in_with_password()
+
+alt Valid credentials
+    SupabaseAuth --> SupabaseClient: Authenticated user + session
+    SupabaseClient -> Database: Verify profile and event_organiser role
+    alt Profile and Event Organiser role exist
+        Database --> SupabaseClient: Access confirmed
+        SupabaseClient --> AuthRoute: Authentication and role verification successful
+        AuthRoute --> LoginUI: Login successful
+        LoginUI --> OrganiserUI: Show Event Organiser functionality
+    else Profile or Event Organiser role missing
+        Database --> SupabaseClient: Required access record not found
+        SupabaseClient -> SupabaseAuth: sign_out()
+        SupabaseClient --> AuthRoute: Event Organiser access denied
+        AuthRoute --> LoginUI: Access denied
+    end
+else Invalid credentials
+    SupabaseAuth --> SupabaseClient: Authentication error
+    SupabaseClient --> AuthRoute: Authentication failure
+    AuthRoute --> LoginUI: Access denied
+end
+
+== Authorised Event Access ==
+
+Organiser -> OrganiserUI: Open own event
+OrganiserUI -> EventService: Request event information
+EventService -> SupabaseClient: Query event
+SupabaseClient -> Database: SELECT event using authenticated session
+
+alt Event belongs to organiser and RLS allows access
+    Database --> SupabaseClient: Event data
+    SupabaseClient --> EventService: Authorised event
+    EventService --> OrganiserUI: Display event information
+else Event is not authorised
+    Database --> SupabaseClient: No accessible row
+    SupabaseClient --> EventService: No authorised event returned
+    EventService --> OrganiserUI: Event information not disclosed
+end
+
+== Authorised Event Modification ==
+
+Organiser -> OrganiserUI: Update own editable event
+OrganiserUI -> EventService: Submit event change
+EventService -> SupabaseClient: Request current event
+SupabaseClient -> Database: SELECT event using authenticated session
+
+alt Event is authorised and status is draft, requested, or changes_requested
+    Database --> SupabaseClient: Authorised editable event
+    EventService -> SupabaseClient: Update permitted event name
+    SupabaseClient -> Database: UPDATE event using authenticated session
+    Database --> SupabaseClient: Updated event
+    SupabaseClient --> EventService: Update successful
+    EventService --> OrganiserUI: Display updated event
+else Event is not authorised
+    Database --> SupabaseClient: No authorised update
+    SupabaseClient --> EventService: Update rejected
+    EventService --> OrganiserUI: Event remains unchanged
+else Event is not draft
+    Database --> SupabaseClient: Authorised non-editable event
+    SupabaseClient --> EventService: Update rejected for event status
+    EventService --> OrganiserUI: Display event as read-only
+end
+
+== Logout ==
+
+Organiser -> OrganiserUI: Select Logout
+OrganiserUI -> AuthRoute: Logout request
+AuthRoute -> SupabaseClient: Sign out authenticated session
+SupabaseClient -> SupabaseAuth: sign_out()
+SupabaseAuth --> SupabaseClient: Session ended
+SupabaseClient --> AuthRoute: Logout successful
+AuthRoute --> OrganiserUI: Protected functionality inaccessible
+OrganiserUI --> Organiser: Return to unauthenticated state
+
+@enduml
