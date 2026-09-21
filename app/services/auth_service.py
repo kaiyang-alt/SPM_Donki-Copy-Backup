@@ -8,7 +8,6 @@ class AuthenticationError(Exception):
 class AuthorisationError(Exception):
     """Raised when an authenticated account lacks Event Organiser access."""
 
-
 def login_event_organiser(email: str, password: str) -> dict:
     client = create_supabase_client()
     try:

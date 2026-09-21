@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app1.app import app
-from app1.services.auth_service import AuthenticationError, AuthorisationError
+from app.app import app
+from app.services.auth_service import AuthenticationError, AuthorisationError
 
 
 @pytest.fixture

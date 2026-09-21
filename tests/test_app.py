@@ -1,4 +1,4 @@
-from app1.app import app
+from app.app import app
 
 
 def test_home_page():
