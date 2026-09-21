@@ -2,8 +2,8 @@ from unittest.mock import patch
 
 import pytest
 
-from app.app import app
-from app.services.event_change_request_service import (
+from app1.app import app
+from app1.services.event_change_request_service import (
     EventChangeRequestAccessError,
     EventChangeRequestNotFoundError,
     EventChangeRequestValidationError,

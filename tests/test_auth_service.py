@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.auth_service import AuthorisationError, login_event_organiser
+from app1.services.auth_service import AuthorisationError, login_event_organiser
 
 
 def _signed_in_response():

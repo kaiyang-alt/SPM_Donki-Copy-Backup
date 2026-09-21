@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.event_change_request_service import (
+from app1.services.event_change_request_service import (
     EventChangeRequestNotFoundError,
     EventChangeRequestValidationError,
     create_event_change_request,

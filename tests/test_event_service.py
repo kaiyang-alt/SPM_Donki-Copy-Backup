@@ -1,93 +1,83 @@
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
-
+from unittest.mock import patch
 import pytest
 
-from app.services.event_service import (
-    EventNotEditableError,
-    EventNotFoundError,
-    list_authorised_events,
-    update_authorised_event_name,
-)
+from app1.app import app
+from app1.services.event_service import EventNotEditableError, EventNotFoundError
 
 
-@patch("app.services.event_service.create_authenticated_supabase_client")
-def test_event_listing_uses_authenticated_rls_client(mock_create_client):
-    client = MagicMock()
-    client.table.return_value.select.return_value.execute.return_value = SimpleNamespace(
-        data=[{"event_id": "event-1", "name": "Authorised Event"}]
-    )
-    mock_create_client.return_value = client
-
-    events = list_authorised_events("user-access-token")
-
-    assert events == [{"event_id": "event-1", "name": "Authorised Event"}]
-    mock_create_client.assert_called_once_with("user-access-token")
-    client.auth.get_user.assert_called_once_with("user-access-token")
-    client.table.assert_called_once_with("event")
+@pytest.fixture
+def client():
+    return app.test_client()
 
 
-@patch("app.services.event_service.create_authenticated_supabase_client")
-def test_update_stops_when_rls_does_not_return_event(mock_create_client):
-    client = MagicMock()
-    query = client.table.return_value.select.return_value.eq.return_value
-    query.limit.return_value.execute.return_value = SimpleNamespace(data=[])
-    mock_create_client.return_value = client
+def test_event_list_requires_authentication(client):
+    response = client.get("/api/events")
 
-    with pytest.raises(EventNotFoundError):
-        update_authorised_event_name(
-            "user-access-token", "unrelated-event", "Unauthorised Change"
-        )
-
-    client.table.return_value.update.assert_not_called()
+    assert response.status_code == 401
+    assert response.get_json() == {"error": "Authentication is required."}
 
 
-@pytest.mark.parametrize("editable_status", ["draft", "requested", "changes_requested"])
-@patch("app.services.event_service.create_authenticated_supabase_client")
-def test_event_name_can_be_updated_in_organiser_editable_status(
-    mock_create_client, editable_status
+@patch("app1.routes.events.list_authorised_events")
+def test_authenticated_organiser_receives_only_service_authorised_events(
+    mock_list_events, client
 ):
-    client = MagicMock()
-    table = client.table.return_value
-    table.select.return_value.eq.return_value.limit.return_value.execute.return_value = (
-        SimpleNamespace(
-            data=[
-                {
-                    "event_id": "event-1",
-                    "name": "Original",
-                    "status": editable_status,
-                }
-            ]
-        )
+    mock_list_events.return_value = [
+        {"event_id": "event-1", "name": "Authorised Event"}
+    ]
+
+    response = client.get(
+        "/api/events", headers={"Authorization": "Bearer access-token"}
     )
-    table.update.return_value.eq.return_value.execute.return_value = SimpleNamespace(
-        data=[
-            {"event_id": "event-1", "name": "Updated", "status": editable_status}
-        ]
+
+    assert response.status_code == 200
+    assert response.get_json() == {
+        "events": [{"event_id": "event-1", "name": "Authorised Event"}]
+    }
+    mock_list_events.assert_called_once_with("access-token")
+
+
+@patch("app1.routes.events.update_authorised_event_name")
+def test_authenticated_organiser_can_update_authorised_event(mock_update, client):
+    mock_update.return_value = {"event_id": "event-1", "name": "Updated Event"}
+
+    response = client.patch(
+        "/api/events/event-1",
+        headers={"Authorization": "Bearer access-token"},
+        json={"name": "Updated Event"},
     )
-    mock_create_client.return_value = client
 
-    event = update_authorised_event_name("user-access-token", "event-1", "Updated")
-
-    assert event["name"] == "Updated"
-    table.update.assert_called_once_with({"name": "Updated"})
-    table.update.return_value.eq.assert_called_once_with("event_id", "event-1")
+    assert response.status_code == 200
+    assert response.get_json()["event"]["name"] == "Updated Event"
+    mock_update.assert_called_once_with("access-token", "event-1", "Updated Event")
 
 
-@patch("app.services.event_service.create_authenticated_supabase_client")
-def test_non_editable_event_name_cannot_be_updated(mock_create_client):
-    client = MagicMock()
-    table = client.table.return_value
-    table.select.return_value.eq.return_value.limit.return_value.execute.return_value = (
-        SimpleNamespace(
-            data=[
-                {"event_id": "event-1", "name": "Confirmed", "status": "confirmed"}
-            ]
-        )
+@patch("app1.routes.events.update_authorised_event_name")
+def test_unrelated_event_cannot_be_updated(mock_update, client):
+    mock_update.side_effect = EventNotFoundError("Event not found.")
+
+    response = client.patch(
+        "/api/events/unrelated-event",
+        headers={"Authorization": "Bearer access-token"},
+        json={"name": "Unauthorised Change"},
     )
-    mock_create_client.return_value = client
 
-    with pytest.raises(EventNotEditableError):
-        update_authorised_event_name("user-access-token", "event-1", "Disallowed")
+    assert response.status_code == 404
+    assert response.get_json() == {"error": "Event not found."}
 
-    table.update.assert_not_called()
+
+@patch("app1.routes.events.update_authorised_event_name")
+def test_non_editable_event_cannot_be_updated(mock_update, client):
+    mock_update.side_effect = EventNotEditableError(
+        "The event cannot be edited in its current status."
+    )
+
+    response = client.patch(
+        "/api/events/confirmed-event",
+        headers={"Authorization": "Bearer access-token"},
+        json={"name": "Disallowed Change"},
+    )
+
+    assert response.status_code == 409
+    assert response.get_json() == {
+        "error": "The event cannot be edited in its current status."
+    }

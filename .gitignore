@@ -23,4 +23,8 @@ Thumbs.db
 htmlcov/
 
 # Logs
-*.log
+*.logapp1/venv/ 
+.venv/ 
+__pycache__/ 
+.pytest_cache/ 
+.env 
