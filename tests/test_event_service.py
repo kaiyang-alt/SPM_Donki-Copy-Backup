@@ -1,8 +1,8 @@
 from unittest.mock import patch
 import pytest
 
-from app1.app import app
-from app1.services.event_service import EventNotEditableError, EventNotFoundError
+from app.app import app
+from app.services.event_service import EventNotEditableError, EventNotFoundError
 
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def test_event_list_requires_authentication(client):
     assert response.get_json() == {"error": "Authentication is required."}
 
 
-@patch("app1.routes.events.list_authorised_events")
+@patch("app.routes.events.list_authorised_events")
 def test_authenticated_organiser_receives_only_service_authorised_events(
     mock_list_events, client
 ):
@@ -36,7 +36,7 @@ def test_authenticated_organiser_receives_only_service_authorised_events(
     mock_list_events.assert_called_once_with("access-token")
 
 
-@patch("app1.routes.events.update_authorised_event_name")
+@patch("app.routes.events.update_authorised_event_name")
 def test_authenticated_organiser_can_update_authorised_event(mock_update, client):
     mock_update.return_value = {"event_id": "event-1", "name": "Updated Event"}
 
@@ -51,7 +51,7 @@ def test_authenticated_organiser_can_update_authorised_event(mock_update, client
     mock_update.assert_called_once_with("access-token", "event-1", "Updated Event")
 
 
-@patch("app1.routes.events.update_authorised_event_name")
+@patch("app.routes.events.update_authorised_event_name")
 def test_unrelated_event_cannot_be_updated(mock_update, client):
     mock_update.side_effect = EventNotFoundError("Event not found.")
 
@@ -65,7 +65,7 @@ def test_unrelated_event_cannot_be_updated(mock_update, client):
     assert response.get_json() == {"error": "Event not found."}
 
 
-@patch("app1.routes.events.update_authorised_event_name")
+@patch("app.routes.events.update_authorised_event_name")
 def test_non_editable_event_cannot_be_updated(mock_update, client):
     mock_update.side_effect = EventNotEditableError(
         "The event cannot be edited in its current status."
