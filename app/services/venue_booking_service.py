@@ -1,10 +1,11 @@
-from datetime import date, time
-import logging
+from datetime import UTC, date, datetime, time, timedelta, timezone
 import re
 
 from app.supabase_client import create_authenticated_supabase_client
 
-logger = logging.getLogger(__name__)
+
+SINGAPORE_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Singapore")
+ACTIVE_BOOKING_STATUSES = ("requested", "tentative", "confirmed")
 
 
 class VenueBookingError(Exception):
@@ -27,228 +28,385 @@ def authenticated_venue_client(access_token, role):
             raise ValueError("Missing user")
     except Exception as exc:
         raise VenueBookingError("The authenticated session is invalid.", 401) from exc
-    roles = client.table('user_role').select('role').eq('user_id', user_id).eq('role', role).execute()
+    roles = (
+        client.table("user_role")
+        .select("role")
+        .eq("user_id", user_id)
+        .eq("role", role)
+        .execute()
+    )
     if not roles.data:
         raise VenueBookingError("You do not have permission to perform this action.", 403)
     return client, user_id
 
 
-def validate_booking_payload(payload):
-    """Validate and normalise submission data before accessing the database."""
+def validate_booking_payload(payload, require_venue=True):
+    """Validate and normalize the browser-facing booking payload."""
     if not isinstance(payload, dict):
         raise VenueBookingError("Request body must be a JSON object.")
-    required = ('event_id', 'venue_id', 'booking_date', 'start_time', 'end_time', 'setup_layout')
+    required = ["event_id", "booking_date", "start_time", "end_time", "setup_layout"]
+    if require_venue:
+        required.insert(1, "venue_id")
     cleaned = {}
     for field in required:
         value = payload.get(field)
         if not isinstance(value, str) or not value.strip():
             raise VenueBookingError(f"{field} must be a non-empty string.")
         cleaned[field] = value.strip()
-    validate_time_slot(cleaned['booking_date'], cleaned['start_time'], cleaned['end_time'])
-    notes = payload.get('setup_notes')
-    if notes is not None and not isinstance(notes, str):
-        raise VenueBookingError("setup_notes must be a string.")
-    cleaned['setup_notes'] = (notes.strip() or None) if notes is not None else None
+    cleaned["requested_start"], cleaned["requested_end"] = validate_time_slot(
+        cleaned["booking_date"], cleaned["start_time"], cleaned["end_time"]
+    )
     return cleaned
 
 
 def validate_time_slot(slot_date, start_time, end_time):
     try:
-        if not isinstance(slot_date, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', slot_date):
+        if not isinstance(slot_date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", slot_date):
             raise ValueError()
-        date.fromisoformat(slot_date)
+        parsed_date = date.fromisoformat(slot_date)
+        parsed_times = []
         for value in (start_time, end_time):
-            if not isinstance(value, str) or not re.fullmatch(r'\d{2}:\d{2}(:\d{2})?', value):
+            if not isinstance(value, str) or not re.fullmatch(r"\d{2}:\d{2}(:\d{2})?", value):
                 raise ValueError()
-        start, end = time.fromisoformat(start_time), time.fromisoformat(end_time)
+            parsed_times.append(time.fromisoformat(value))
+        start, end = parsed_times
     except ValueError as exc:
         raise VenueBookingError("Use a valid date (YYYY-MM-DD) and time (HH:MM or HH:MM:SS).") from exc
     if start >= end:
         raise VenueBookingError("End time must be after start time on the same date.")
+    return (
+        datetime.combine(parsed_date, start, SINGAPORE_TIMEZONE).isoformat(),
+        datetime.combine(parsed_date, end, SINGAPORE_TIMEZONE).isoformat(),
+    )
 
-def execute_conflict_check(supabase, venue_id, booking_date, start_time, end_time, exclude_booking_id=None):
-    """
-    Checks for overlapping bookings or blackout dates in venue_booking and venue_block.
-    """
-    # Check existing active/pending bookings for schedule collisions
-    query = supabase.table('venue_booking') \
-        .select('id') \
-        .eq('venue_id', venue_id) \
-        .eq('booking_date', booking_date) \
-        .in_('status', ['requested', 'tentative', 'confirmed']) \
-        .lt('start_time', end_time) \
-        .gt('end_time', start_time)
 
-    if exclude_booking_id:
-        query = query.neq('id', exclude_booking_id)
+def _supports_layout(venue, setup_layout):
+    layouts = venue.get("supported_layouts")
+    if isinstance(layouts, list):
+        supported = layouts
+    elif isinstance(layouts, dict):
+        supported = list(layouts.keys()) + list(layouts.values())
+    else:
+        return False
+    requested = setup_layout.casefold()
+    return any(
+        isinstance(value, str) and value.casefold() == requested
+        for value in supported
+    )
 
-    booking_conflict = query.execute()
-    if booking_conflict.data:
-        return True
 
-    # Check blackout periods in venue_block
-    block_conflict = supabase.table('venue_block') \
-        .select('id') \
-        .eq('venue_id', venue_id) \
-        .eq('block_date', booking_date) \
-        .lt('start_time', end_time) \
-        .gt('end_time', start_time) \
+def _has_sufficient_capacity(venue, event):
+    expected_attendance = event.get("expected_attendance")
+    capacity = venue.get("capacity")
+    return not (
+        isinstance(expected_attendance, int)
+        and isinstance(capacity, int)
+        and capacity < expected_attendance
+    )
+
+
+def _event_for_coordinator(supabase, event_id, user_id):
+    response = (
+        supabase.table("event")
+        .select("*")
+        .eq("event_id", event_id)
+        .eq("coordinator_id", user_id)
         .execute()
+    )
+    if not response.data:
+        raise VenueBookingError("Event not found or not assigned to this Coordinator.", 404)
+    event = response.data[0]
+    if event.get("status") != "planning":
+        raise VenueBookingError(
+            "Venue bookings can only be requested for approved events in planning status."
+        )
+    return event
 
-    if block_conflict.data:
+
+def _eligible_venue(supabase, venue_id, event, setup_layout):
+    response = (
+        supabase.table("venue")
+        .select("*")
+        .eq("venue_id", venue_id)
+        .eq("active", True)
+        .execute()
+    )
+    if not response.data:
+        raise VenueBookingError("The selected venue is unavailable.", 404)
+    venue = response.data[0]
+    if not _has_sufficient_capacity(venue, event):
+        raise VenueBookingError("The selected venue does not have sufficient capacity.", 409)
+    if not _supports_layout(venue, setup_layout):
+        raise VenueBookingError("The selected venue does not support the requested layout.", 409)
+    return venue
+
+
+def execute_conflict_check(
+    supabase,
+    venue_id,
+    requested_start,
+    requested_end,
+    exclude_booking_id=None,
+):
+    """Check half-open timestamp ranges against active bookings and venue blocks."""
+    query = (
+        supabase.table("venue_booking")
+        .select("booking_id")
+        .eq("venue_id", venue_id)
+        .in_("status", ACTIVE_BOOKING_STATUSES)
+        .lt("requested_start", requested_end)
+        .gt("requested_end", requested_start)
+    )
+    if exclude_booking_id:
+        query = query.neq("booking_id", exclude_booking_id)
+    if query.execute().data:
         return True
+    return bool(
+        supabase.table("venue_block")
+        .select("venue_block_id")
+        .eq("venue_id", venue_id)
+        .lt("start_datetime", requested_end)
+        .gt("end_datetime", requested_start)
+        .execute()
+        .data
+    )
 
-    return False
+
+def get_coordinator_booking_context(access_token):
+    """Return assigned planning events, active venues, and persisted bookings."""
+    supabase, user_id = authenticated_venue_client(access_token, "event_coordinator")
+    events = (
+        supabase.table("event")
+        .select("*")
+        .eq("coordinator_id", user_id)
+        .eq("status", "planning")
+        .execute()
+        .data
+        or []
+    )
+    venues = supabase.table("venue").select("*").eq("active", True).execute().data or []
+    event_ids = [event["event_id"] for event in events]
+    bookings = []
+    if event_ids:
+        bookings = (
+            supabase.table("venue_booking")
+            .select("*, venue(*)")
+            .in_("event_id", event_ids)
+            .execute()
+            .data
+            or []
+        )
+    return {
+        "success": True,
+        "events": events,
+        "venues": venues,
+        "bookings": bookings,
+    }, 200
 
 
-def submit_venue_booking_request(access_token, event_id, venue_id, booking_date, start_time, end_time, setup_layout, setup_notes=None):
-    """Submits a new venue booking request with status 'requested'."""
-    booking_payload = validate_booking_payload({
-        'event_id': event_id, 'venue_id': venue_id, 'booking_date': booking_date,
-        'start_time': start_time, 'end_time': end_time,
-        'setup_layout': setup_layout, 'setup_notes': setup_notes,
-    })
-    event_id = booking_payload['event_id']
-    venue_id = booking_payload['venue_id']
-    booking_date = booking_payload['booking_date']
-    start_time = booking_payload['start_time']
-    end_time = booking_payload['end_time']
-    supabase, user_id = authenticated_venue_client(access_token, 'event_coordinator')
+def list_available_venues(
+    access_token,
+    event_id,
+    booking_date,
+    start_time,
+    end_time,
+    setup_layout,
+):
+    payload = validate_booking_payload(
+        {
+            "event_id": event_id,
+            "booking_date": booking_date,
+            "start_time": start_time,
+            "end_time": end_time,
+            "setup_layout": setup_layout,
+        },
+        require_venue=False,
+    )
+    supabase, user_id = authenticated_venue_client(access_token, "event_coordinator")
+    event = _event_for_coordinator(supabase, payload["event_id"], user_id)
+    venues = supabase.table("venue").select("*").eq("active", True).execute().data or []
+    available = []
+    for venue in venues:
+        if not _has_sufficient_capacity(venue, event):
+            continue
+        if not _supports_layout(venue, payload["setup_layout"]):
+            continue
+        if not execute_conflict_check(
+            supabase,
+            venue["venue_id"],
+            payload["requested_start"],
+            payload["requested_end"],
+        ):
+            available.append(venue)
+    return {"success": True, "venues": available}, 200
 
-    event_res = supabase.table('event').select('*').eq('event_id', event_id).execute()
-    if not event_res.data:
-        return {"success": False, "error": "Event not found."}, 404
 
-    event = event_res.data[0]
-    if event.get('status') != 'planning':
-        return {
-            "success": False,
-            "error": "Venue bookings can only be requested for approved events in planning status."
-        }, 400
-
-    existing = (supabase.table('venue_booking').select('*')
-                .eq('event_id', event_id)
-                .in_('status', ['requested', 'tentative', 'confirmed']).execute())
+def submit_venue_booking_request(
+    access_token, event_id, venue_id, booking_date, start_time, end_time, setup_layout
+):
+    """Create a requested booking, which acts as the tentative hold."""
+    payload = validate_booking_payload(
+        {
+            "event_id": event_id,
+            "venue_id": venue_id,
+            "booking_date": booking_date,
+            "start_time": start_time,
+            "end_time": end_time,
+            "setup_layout": setup_layout,
+        }
+    )
+    supabase, user_id = authenticated_venue_client(access_token, "event_coordinator")
+    event = _event_for_coordinator(supabase, payload["event_id"], user_id)
+    _eligible_venue(supabase, payload["venue_id"], event, payload["setup_layout"])
+    existing = (
+        supabase.table("venue_booking")
+        .select("booking_id")
+        .eq("event_id", payload["event_id"])
+        .in_("status", ACTIVE_BOOKING_STATUSES)
+        .execute()
+    )
     if existing.data:
-        return {"success": False, "error": "This event already has an active venue arrangement."}, 409
-
-    if execute_conflict_check(supabase, venue_id, booking_date, start_time, end_time):
-        return {
-            "success": False,
-            "error": "The selected venue slot is unavailable due to an existing booking or blackout period."
-        }, 409
-
-    booking_payload['status'] = 'requested'
-
-    booking_res = supabase.table('venue_booking').insert(booking_payload).execute()
+        raise VenueBookingError("This event already has an active venue arrangement.", 409)
+    if execute_conflict_check(
+        supabase,
+        payload["venue_id"],
+        payload["requested_start"],
+        payload["requested_end"],
+    ):
+        raise VenueBookingError(
+            "The selected venue slot is unavailable due to an existing booking or blackout period.",
+            409,
+        )
+    layout_update = (
+        supabase.table("event")
+        .update({"layout_requirements": payload["setup_layout"]})
+        .eq("event_id", payload["event_id"])
+        .eq("coordinator_id", user_id)
+        .execute()
+    )
+    if not layout_update.data:
+        raise VenueBookingError("Unable to save the selected setup layout.", 409)
+    booking_payload = {
+        "venue_id": payload["venue_id"],
+        "event_id": payload["event_id"],
+        "requested_start": payload["requested_start"],
+        "requested_end": payload["requested_end"],
+        "status": "requested",
+        "requested_by": user_id,
+        "requested_at": datetime.now(UTC).isoformat(),
+    }
+    booking_res = supabase.table("venue_booking").insert(booking_payload).execute()
     if not booking_res.data:
-        return {"success": False, "error": "Failed to create venue booking request."}, 500
-
-    created_booking = booking_res.data[0]
-
-    # The current recipient lookup is provisional until the venue/staff assignment
-    # relationship is supplied. See the story's integration blockers.
-    notification_sent = False
-    try:
-        staff_res = supabase.table('user_role').select('user_id').eq('role', 'venue_staff').execute()
-        if staff_res.data:
-            notifications = [
-                {
-                    "user_id": staff['user_id'],
-                    "title": "New Venue Booking Request",
-                    "message": f"New booking request (ID: {created_booking['id']}) for Venue {venue_id} requires review.",
-                    "is_read": False
-                }
-                for staff in staff_res.data
-            ]
-            result = supabase.table('notification').insert(notifications).execute()
-            notification_sent = bool(result.data)
-    except Exception:
-        logger.exception('Booking saved, but venue notification delivery failed.')
-
-    response = {
+        raise VenueBookingError("Failed to create venue booking request.", 500)
+    return {
         "success": True,
         "message": "Venue booking request submitted successfully.",
-        "booking": created_booking,
+        "booking": booking_res.data[0],
         "display_status": "Pending Venue Approval",
-        "notification_sent": notification_sent,
-    }
-    if not notification_sent:
-        response['warning'] = "Booking saved, but Venue Staff notification could not be confirmed. Do not resubmit the booking."
-    return response, 201
+        "notification_sent": False,
+        "warning": (
+            "Booking saved, but Venue Staff notification is unavailable because the current "
+            "database has no venue-to-staff assignment or notification insert policy."
+        ),
+    }, 201
 
 
 def get_all_booking_requests(access_token):
-    """Retrieves all venue booking requests formatted with venue details, event capacity, and overlaps."""
-    supabase, _ = authenticated_venue_client(access_token, 'venue_staff')
-    bookings_res = supabase.table('venue_booking').select('*, venue(*), event(*)').execute()
-    
-    requests_list = []
-    for b in bookings_res.data or []:
-        venue = b.get('venue') or {}
-        event = b.get('event') or {}
-        
-        # Check for overlapping holds/bookings
-        has_overlap = execute_conflict_check(
-            supabase, b['venue_id'], b['booking_date'], b['start_time'], b['end_time'], exclude_booking_id=b['id']
-        )
+    """Return venue booking requests for authenticated Venue Staff."""
+    supabase, _ = authenticated_venue_client(access_token, "venue_staff")
+    bookings = (
+        supabase.table("venue_booking")
+        .select("*, venue(*), event(*)")
+        .execute()
+        .data
+        or []
+    )
+    return {"success": True, "requests": bookings}, 200
 
-        requests_list.append({
-            "booking_id": b['id'],
-            "status": b['status'],
-            "requested_date": b['booking_date'],
-            "time_slot": f"{b['start_time']} - {b['end_time']}",
-            "setup_layout": b.get('setup_layout'),
-            "setup_notes": b.get('setup_notes'),
-            "event_capacity_required": event.get('expected_capacity', 0),
-            "venue_listed_capacity": venue.get('capacity', 0),
-            "venue_layout": venue.get('layout_type'),
-            "venue_accessibility": venue.get('accessibility_info'),
-            "has_overlapping_conflict": has_overlap,
-            "rejection_reason": b.get('rejection_reason'),
-            "suggested_alternatives": b.get('suggested_alternatives')
-        })
 
-    return {"success": True, "requests": requests_list}, 200
+def get_venue_staff_context(access_token):
+    """Return the venue catalogue needed by authenticated Venue Staff tools."""
+    supabase, _ = authenticated_venue_client(access_token, "venue_staff")
+    venues = supabase.table("venue").select("*").execute().data or []
+    return {"success": True, "venues": venues}, 200
+
+
+def _get_booking(supabase, booking_id):
+    response = (
+        supabase.table("venue_booking")
+        .select("*")
+        .eq("booking_id", booking_id)
+        .execute()
+    )
+    if not response.data:
+        raise VenueBookingError("Booking request not found.", 404)
+    return response.data[0]
+
+
+def _update_pending_booking(supabase, booking, update):
+    if booking.get("status") not in ("requested", "tentative"):
+        raise VenueBookingError("Only pending requests can be decided.", 409)
+    updated = (
+        supabase.table("venue_booking")
+        .update(update)
+        .eq("booking_id", booking["booking_id"])
+        .eq("status", booking["status"])
+        .execute()
+    )
+    if not updated.data:
+        raise VenueBookingError("The booking changed. Refresh before trying again.", 409)
+    return updated.data[0]
+
+
+def _decision_response(message, booking):
+    return {
+        "success": True,
+        "message": message,
+        "booking": booking,
+        "notification_sent": False,
+        "warning": (
+            "The Coordinator could not be notified under the current "
+            "notification RLS policy."
+        ),
+    }, 200
 
 
 def approve_venue_booking_request(access_token, booking_id):
-    """Approves a booking request using first-come, first-served conflict enforcement."""
-    supabase, _ = authenticated_venue_client(access_token, 'venue_staff')
+    supabase, user_id = authenticated_venue_client(access_token, "venue_staff")
+    booking = _get_booking(supabase, booking_id)
+    if booking.get("status") not in ("requested", "tentative"):
+        raise VenueBookingError("Only pending requests can be approved.", 409)
+    if execute_conflict_check(
+        supabase,
+        booking["venue_id"],
+        booking["requested_start"],
+        booking["requested_end"],
+        exclude_booking_id=booking_id,
+    ):
+        raise VenueBookingError("Cannot approve a conflicting venue request.", 409)
+    updated_booking = _update_pending_booking(
+        supabase,
+        booking,
+        {
+            "status": "confirmed",
+            "decided_by": user_id,
+            "decided_at": datetime.now(UTC).isoformat(),
+            "decision_reason": None,
+        },
+    )
+    return _decision_response("Booking request approved.", updated_booking)
 
-    booking_res = supabase.table('venue_booking').select('*').eq('id', booking_id).execute()
-    if not booking_res.data:
-        return {"success": False, "error": "Booking request not found."}, 404
 
-    booking = booking_res.data[0]
-    if booking['status'] == 'rejected':
-        return {"success": False, "error": "Cannot approve a permanently rejected request."}, 400
-    if booking['status'] not in ('requested', 'tentative'):
-        return {"success": False, "error": "Only pending requests can be approved."}, 409
-
-    if execute_conflict_check(supabase, booking['venue_id'], booking['booking_date'], booking['start_time'], booking['end_time'], exclude_booking_id=booking_id):
-        return {"success": False, "error": "Cannot approve. Time slot was claimed by a prior request."}, 409
-
-    updated_res = (supabase.table('venue_booking').update({"status": "confirmed"})
-                   .eq('id', booking_id).eq('status', booking['status']).execute())
-    if not updated_res.data:
-        return {"success": False, "error": "The booking changed. Refresh before trying again."}, 409
-
-    # Notify Event Coordinator
-    event_res = supabase.table('event').select('coordinator_id').eq('event_id', booking['event_id']).execute()
-    if event_res.data and event_res.data[0].get('coordinator_id'):
-        supabase.table('notification').insert({
-            "user_id": event_res.data[0]['coordinator_id'],
-            "title": "Booking Request Approved",
-            "message": f"Your booking request for Venue {booking['venue_id']} has been approved.",
-            "is_read": False
-        }).execute()
-
-    return {"success": True, "message": "Booking request approved.", "booking": updated_res.data[0]}, 200
+def _decision_reason(reason, alternative_venue_ids):
+    reason_text = reason.strip() if isinstance(reason, str) else ""
+    alternatives = [value.strip() for value in (alternative_venue_ids or [])]
+    parts = [f"Reason: {reason_text or 'Not provided'}"]
+    if alternatives:
+        parts.append(f"Suggested alternatives: {', '.join(alternatives)}")
+    return "\n".join(parts)
 
 
 def reject_venue_booking_request(access_token, booking_id, reason=None, alternative_venue_ids=None):
-    """Rejects a booking request with optional notes and suggested alternatives. Immutable status."""
     if reason is not None and not isinstance(reason, str):
         raise VenueBookingError("reason must be a string.")
     if alternative_venue_ids is not None and (
@@ -256,100 +414,108 @@ def reject_venue_booking_request(access_token, booking_id, reason=None, alternat
         or any(not isinstance(value, str) or not value.strip() for value in alternative_venue_ids)
     ):
         raise VenueBookingError("alternative_venue_ids must be a list of venue IDs.")
-    supabase, _ = authenticated_venue_client(access_token, 'venue_staff')
-
-    booking_res = supabase.table('venue_booking').select('*').eq('id', booking_id).execute()
-    if not booking_res.data:
-        return {"success": False, "error": "Booking request not found."}, 404
-
-    booking = booking_res.data[0]
-    if booking['status'] == 'rejected':
-        return {"success": False, "error": "Request is already rejected and cannot be modified."}, 400
-    if booking['status'] not in ('requested', 'tentative'):
-        return {"success": False, "error": "Only pending requests can be rejected."}, 409
-
-    update_payload = {
-        "status": "rejected",
-        "rejection_reason": reason,
-        "suggested_alternatives": alternative_venue_ids or []
-    }
-
-    updated_res = (supabase.table('venue_booking').update(update_payload)
-                   .eq('id', booking_id).eq('status', booking['status']).execute())
-    if not updated_res.data:
-        return {"success": False, "error": "The booking changed. Refresh before trying again."}, 409
-
-    # Notify Event Coordinator
-    event_res = supabase.table('event').select('coordinator_id').eq('event_id', booking['event_id']).execute()
-    if event_res.data and event_res.data[0].get('coordinator_id'):
-        supabase.table('notification').insert({
-            "user_id": event_res.data[0]['coordinator_id'],
-            "title": "Booking Request Rejected",
-            "message": f"Your booking request for Venue {booking['venue_id']} was rejected. Reason: {reason or 'N/A'}",
-            "is_read": False
-        }).execute()
-
-    return {
-        "success": True,
-        "message": "Booking request rejected.",
-        "booking": updated_res.data[0]
-    }, 200
+    supabase, user_id = authenticated_venue_client(access_token, "venue_staff")
+    booking = _get_booking(supabase, booking_id)
+    if booking.get("status") not in ("requested", "tentative"):
+        raise VenueBookingError("Only pending requests can be rejected.", 409)
+    updated_booking = _update_pending_booking(
+        supabase,
+        booking,
+        {
+            "status": "rejected",
+            "decided_by": user_id,
+            "decided_at": datetime.now(UTC).isoformat(),
+            "decision_reason": _decision_reason(reason, alternative_venue_ids),
+        },
+    )
+    return _decision_response("Booking request rejected.", updated_booking)
 
 
-def block_venue_availability(access_token, venue_id, block_date, start_time, end_time, reason=None):
-    """Marks a venue slot as unavailable without altering existing confirmed bookings."""
-    validate_time_slot(block_date, start_time, end_time)
+def block_venue_availability(
+    access_token,
+    venue_id,
+    block_date,
+    start_time,
+    end_time,
+    reason=None,
+):
+    requested_start, requested_end = validate_time_slot(block_date, start_time, end_time)
     if reason is not None and not isinstance(reason, str):
         raise VenueBookingError("reason must be a string.")
-    supabase, _ = authenticated_venue_client(access_token, 'venue_staff')
-
+    supabase, user_id = authenticated_venue_client(access_token, "venue_staff")
     payload = {
         "venue_id": venue_id,
-        "block_date": block_date,
-        "start_time": start_time,
-        "end_time": end_time,
-        "reason": reason
+        "start_datetime": requested_start,
+        "end_datetime": requested_end,
+        "reason": (reason.strip() or None) if isinstance(reason, str) else None,
+        "created_by": user_id,
+        "created_at": datetime.now(UTC).isoformat(),
     }
+    response = supabase.table("venue_block").insert(payload).execute()
+    if not response.data:
+        raise VenueBookingError("Failed to create venue blackout block.", 500)
+    return {
+        "success": True,
+        "message": "Venue block created successfully.",
+        "block": response.data[0],
+    }, 201
 
-    res = supabase.table('venue_block').insert(payload).execute()
-    if not res.data:
-        return {"success": False, "error": "Failed to create venue blackout block."}, 500
 
-    return {"success": True, "message": "Venue block created successfully.", "block": res.data[0]}, 201
-
-
-def update_venue_details(access_token, venue_id, capacity=None, layout_type=None, accessibility_info=None):
-    """Updates venue specifications (capacity, layout, accessibility)."""
+def update_venue_details(
+    access_token,
+    venue_id,
+    capacity=None,
+    supported_layouts=None,
+    accessibility=None,
+):
     if capacity is not None and (type(capacity) is not int or capacity <= 0):
         raise VenueBookingError("capacity must be a positive integer.")
-    for field, value in [('layout_type', layout_type), ('accessibility_info', accessibility_info)]:
-        if value is not None and (not isinstance(value, str) or not value.strip()):
-            raise VenueBookingError(f"{field} must be a non-empty string.")
-    if all(value is None for value in (capacity, layout_type, accessibility_info)):
+    if supported_layouts is not None and (
+        not isinstance(supported_layouts, list)
+        or any(not isinstance(value, str) or not value.strip() for value in supported_layouts)
+    ):
+        raise VenueBookingError("supported_layouts must be a list of layout names.")
+    if accessibility is not None and (not isinstance(accessibility, str) or not accessibility.strip()):
+        raise VenueBookingError("accessibility must be a non-empty string.")
+    if capacity is None and supported_layouts is None and accessibility is None:
         raise VenueBookingError("Provide at least one venue detail to update.")
-    supabase, _ = authenticated_venue_client(access_token, 'venue_staff')
+    supabase, _ = authenticated_venue_client(access_token, "venue_staff")
     payload = {}
-    if capacity is not None: payload['capacity'] = capacity
-    if layout_type is not None: payload['layout_type'] = layout_type
-    if accessibility_info is not None: payload['accessibility_info'] = accessibility_info
-
-    res = supabase.table('venue').update(payload).eq('id', venue_id).execute()
-    if not res.data:
-        return {"success": False, "error": "Failed to update venue details."}, 400
-
-    return {"success": True, "message": "Venue details updated.", "venue": res.data[0]}, 200
+    if capacity is not None:
+        payload["capacity"] = capacity
+    if supported_layouts is not None:
+        payload["supported_layouts"] = [value.strip() for value in supported_layouts]
+    if accessibility is not None:
+        payload["accessibility"] = accessibility.strip()
+    response = (
+        supabase.table("venue")
+        .update(payload)
+        .eq("venue_id", venue_id)
+        .execute()
+    )
+    if not response.data:
+        raise VenueBookingError("Venue not found or could not be updated.", 404)
+    return {"success": True, "message": "Venue details updated.", "venue": response.data[0]}, 200
 
 
 def get_venue_schedule(access_token, venue_id):
-    """Retrieves unified calendar schedule of bookings, holds, and blackout blocks."""
-    supabase, _ = authenticated_venue_client(access_token, 'venue_staff')
-    bookings = supabase.table('venue_booking').select('*').eq('venue_id', venue_id).execute()
-    blocks = supabase.table('venue_block').select('*').eq('venue_id', venue_id).execute()
-
+    supabase, _ = authenticated_venue_client(access_token, "venue_staff")
+    bookings = (
+        supabase.table("venue_booking")
+        .select("*")
+        .eq("venue_id", venue_id)
+        .execute()
+    )
+    blocks = (
+        supabase.table("venue_block")
+        .select("*")
+        .eq("venue_id", venue_id)
+        .execute()
+    )
     return {
         "success": True,
         "schedule": {
             "bookings_and_holds": bookings.data or [],
-            "maintenance_blocks": blocks.data or []
-        }
+            "maintenance_blocks": blocks.data or [],
+        },
     }, 200

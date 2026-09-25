@@ -2,7 +2,7 @@
 
 ## Test Cases
 
-These are acceptance targets, not a claim that all flows are implemented. The automated tests use the real Flask app with a simulated database. Browser behaviour, assigned-staff delivery, actual columns/RLS, and concurrent submission safety require integration verification.
+These are acceptance targets, not a claim that all flows are implemented. The automated tests use the real Flask app with a simulated database shaped to the confirmed Supabase columns. Live RLS, assigned-staff delivery, and concurrent submission safety still require integration verification.
 
 Story: [Submit a Venue Booking Request](../user-stories/submit-venue-booking.md).
 
@@ -10,7 +10,7 @@ Story: [Submit a Venue Booking Request](../user-stories/submit-venue-booking.md)
 
 | Test Case | Category | Acceptance Criterion / Behaviour Covered |
 |---|---|---|
-| TC-001 | Happy Path | AC1, AC2, AC3, AC4, AC5, AC6 — Submission API coverage; browser and assignment-specific notification checks remain integration tests |
+| TC-001 | Happy Path | AC1, AC2, AC3, AC4, AC6 — Submission and persisted workspace coverage; AC5 remains blocked by the unchanged schema/RLS |
 | TC-002 | Negative | AC2 — Automated conflict check rejection for overlapping bookings or blackout dates |
 | TC-003 | Negative | AC1 — Prevention of venue booking request for unapproved events |
 | TC-004 | Negative | AC1 — Validation failure when required submission fields are missing |
@@ -25,8 +25,8 @@ Story: [Submit a Venue Booking Request](../user-stories/submit-venue-booking.md)
 | **Category** | Happy Path |
 | **Test Scenario** | Verify that an Event Coordinator can successfully select an available venue, date, time slot, and layout for an approved event, triggering an automated conflict check, creating a linked booking request record with a tentative hold, notifying Venue Staff, and displaying the pending approval status. |
 | **Pre-conditions** | - An Event Coordinator is authenticated.<br>- Event `EVT-101` exists in `planning` status.<br>- Venue `VEN-001` (Grand Hall) has no existing bookings or blackout blocks on `2026-11-15` for time slot `09:00 - 12:00`.<br>- Venue Staff user `STF-301` is assigned to Venue `VEN-001`. |
-| **Test Steps** | 1. Navigate to the Coordinator Event Workspace for event `EVT-101`.<br>2. Select the option to submit a formal venue booking request.<br>3. Select Venue `VEN-001`, Date `2026-11-15`, Time Slot `09:00 - 12:00`, and Setup Layout `Banquet`.<br>4. Submit the booking request.<br>5. Review the booking status on the event workspace and check the assigned Venue Staff's notifications. |
-| **Test Data** | `Event ID`: `EVT-101`<br>`Venue ID`: `VEN-001`<br>`Date`: `2026-11-15`<br>`Time Slot`: `09:00 - 12:00`<br>`Setup Layout`: `Banquet` |
+| **Test Steps** | 1. Navigate to the Coordinator Event Workspace for event `EVT-101`.<br>2. Select the option to submit a formal venue booking request.<br>3. Select Venue `VEN-001`, Date `2026-11-15`, Time Slot `09:00 - 12:00`, and Setup Layout `Theatre`.<br>4. Submit the booking request.<br>5. Review the booking status on the event workspace and check the assigned Venue Staff's notifications. |
+| **Test Data** | `Event ID`: `EVT-101`<br>`Venue ID`: `VEN-001`<br>`Date`: `2026-11-15`<br>`Time Slot`: `09:00 - 12:00`<br>`Setup Layout`: `Theatre` |
 | **Expected Result** | - The automated conflict check completes successfully with no detected conflicts.<br>- A `venue_booking` record is created with status `requested` (placing a tentative hold) linked directly to `EVT-101` and `VEN-001`.<br>- A notification is created for Venue Staff `STF-301` via the Notification Service regarding the incoming request.<br>- The Coordinator event workspace displays the booking status as "Pending Venue Approval". |
 
 ---
@@ -84,8 +84,8 @@ Story: [Submit a Venue Booking Request](../user-stories/submit-venue-booking.md)
 | TC-011 | Database failure before booking insertion | Sanitised error; no notification | Automated |
 | TC-012 | Notification fails after booking saved | Return saved booking and explicit notification warning; do not create another booking on retry | Automated API test |
 | TC-013 | Different users simultaneously request the same slot or different venues for the same event | At most one active arrangement is committed | Required live integration test; not established by mocks |
-| TC-014 | Two venues have different assigned staff | Notify only staff assigned to the selected venue | Pending assignment schema; current role-wide query does not satisfy this |
-| TC-015 | Coordinator submits through workspace then reloads | Saved request displays Pending Venue Approval after reload | Pending frontend integration |
+| TC-014 | Two venues have different assigned staff | Notify only staff assigned to the selected venue | Blocked: no assignment relationship or notification INSERT policy exists |
+| TC-015 | Coordinator submits through workspace then reloads | Saved request displays Pending Venue Approval after reload | Implemented; browser execution still required |
 | TC-016 | Actual Supabase schema and policies | All columns valid; JWT preserved; authorised conflicts visible; unauthorised writes denied | Required live integration test |
 
 ### TC-002 execution variants

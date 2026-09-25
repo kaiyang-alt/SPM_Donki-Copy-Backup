@@ -50,8 +50,10 @@ This story covers submission, holds, notification, and the Coordinator's pending
 
 ## Outstanding Integration Verification
 
-- No database schema or RLS policy definitions are checked into this repository. Verify all venue, booking, block, and notification column names and relationships against Supabase. `event.event_id` follows the existing event services.
-- The current recipient query selects the `venue_staff` role and is **not yet assignment-specific**. AC5 is not complete until the actual relationship is supplied and used. Do not treat single-recipient mock data as proof of correct routing.
+- The implementation uses the confirmed live columns: `booking_id`, `requested_start`, `requested_end`, `requested_by`, `venue_block_id`, `start_datetime`, and `end_datetime`. A live Supabase integration test is still required to verify the deployed schema and policies.
+- AC5 remains blocked. The unchanged database has no venue-to-staff assignment relationship, and the current notification RLS policies do not permit a Coordinator to insert notifications. Successful booking responses explicitly report `notification_sent: false` with a warning.
 - No atomic booking RPC/constraint is documented locally. Do not claim concurrency safety until the existing database protections are verified. Any required database changes need team agreement.
-- The shared Coordinator interface remains a prototype and is not connected to booking submission or persisted status. AC1's browser flow and AC6 remain incomplete.
-- A notification failure after a successful booking insert returns the saved booking with `notification_sent: false` and a warning. Do not retry the booking itself. Reliable notification retry/atomic delivery remains an integration dependency.
+- The Coordinator and Venue Staff interfaces use real role-verified Supabase sessions. The Coordinator flow checks eligible venues, submits requests, and reloads persisted booking status.
+- Setup layout is stored in the existing `event.layout_requirements` field because `venue_booking` has no layout column. The booking remains linked to that event through `event_id`.
+- User-entered dates and times are interpreted as Singapore time (`UTC+08:00`) before being written to the `timestamptz` booking and block columns.
+- A saved booking reports `notification_sent: false` and a warning. Do not retry the booking itself merely because notification delivery is unavailable.

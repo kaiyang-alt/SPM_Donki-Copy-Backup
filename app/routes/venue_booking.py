@@ -5,7 +5,10 @@ from app.services.venue_booking_service import (
     validate_booking_payload,
     validate_time_slot,
     submit_venue_booking_request,
+    get_coordinator_booking_context,
+    list_available_venues,
     get_all_booking_requests,
+    get_venue_staff_context,
     approve_venue_booking_request,
     reject_venue_booking_request,
     block_venue_availability,
@@ -59,8 +62,29 @@ def handle_submit_venue_booking():
         booking_date=data['booking_date'],
         start_time=data['start_time'],
         end_time=data['end_time'],
+        setup_layout=data['setup_layout']
+    )
+    return jsonify(result), status_code
+
+
+@venue_booking_bp.route('/api/venue-bookings/context', methods=['GET'])
+def handle_coordinator_booking_context():
+    """GET booking form data and persisted status for the signed-in Coordinator."""
+    result, status_code = get_coordinator_booking_context(g.venue_access_token)
+    return jsonify(result), status_code
+
+
+@venue_booking_bp.route('/api/venue-bookings/availability', methods=['POST'])
+def handle_available_venues():
+    """Return venues eligible and conflict-free for the requested arrangement."""
+    data = validate_booking_payload(json_object(), require_venue=False)
+    result, status_code = list_available_venues(
+        access_token=g.venue_access_token,
+        event_id=data['event_id'],
+        booking_date=data['booking_date'],
+        start_time=data['start_time'],
+        end_time=data['end_time'],
         setup_layout=data['setup_layout'],
-        setup_notes=data.get('setup_notes')
     )
     return jsonify(result), status_code
 
@@ -69,6 +93,12 @@ def handle_submit_venue_booking():
 def handle_get_booking_requests():
     """GET /api/venue-bookings - Review incoming requests"""
     result, status_code = get_all_booking_requests(g.venue_access_token)
+    return jsonify(result), status_code
+
+
+@venue_booking_bp.route('/api/venue-staff/context', methods=['GET'])
+def handle_venue_staff_context():
+    result, status_code = get_venue_staff_context(g.venue_access_token)
     return jsonify(result), status_code
 
 
@@ -123,8 +153,8 @@ def handle_update_venue(venue_id):
         access_token=g.venue_access_token,
         venue_id=venue_id,
         capacity=data.get('capacity'),
-        layout_type=data.get('layout_type'),
-        accessibility_info=data.get('accessibility_info')
+        supported_layouts=data.get('supported_layouts'),
+        accessibility=data.get('accessibility')
     )
     return jsonify(result), status_code
 
