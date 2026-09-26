@@ -29,6 +29,6 @@ jobs:
       env:
         # Mock env vars so Supabase client doesn't throw errors during startup
         SUPABASE_URL: "https://mock.supabase.co"
-        SUPABASE_KEY: "mock-key"
+        SUPABASE_PUBLISHABLE_KEY: "mock-key"
       run: |
         python -m pytest -o pythonpath=.

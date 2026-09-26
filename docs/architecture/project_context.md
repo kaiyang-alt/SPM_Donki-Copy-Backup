@@ -122,6 +122,8 @@ Do not create duplicate Supabase configuration or authentication approaches for 
 
 ## 3. Current Database Tables
 
+The documented live Supabase table structure and Row Level Security policies are available in [Database Schema](database_schema.md).
+
 The current live Supabase application tables are:
 
 ```text
