@@ -18,3 +18,4 @@ def test_home_page():
     assert b'Technical Staff (Demo)' in response.data
     assert b'Attendee (Demo)' in response.data
     assert b"js/venue-search.js" in response.data
+    assert b"js/event-review.js" in response.data
