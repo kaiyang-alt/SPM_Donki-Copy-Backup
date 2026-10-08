@@ -38,7 +38,7 @@ def list_venue_booking_requests(access_token: str, venue_id: str | None = None):
     query = client.table("venue_booking").select("*")
     if venue_id:
         query = query.eq("venue_id", venue_id)
-    response = query.order("submitted_at", desc=False).execute()
+    response = query.order("created_at", desc=False).execute()
     return response.data or []
 
 
