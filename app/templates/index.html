@@ -51,8 +51,10 @@
   <div class="modal" id="eventModal" onclick="if(event.target===this)closeModal()"><div class="modal-card"><div class="modal-top"><div><div class="eyebrow">Event details</div><h2 id="modalTitle">Event</h2></div><button class="close" onclick="closeModal()">×</button></div><p class="muted" id="modalMeta" style="margin:16px 0"></p><p id="modalDesc"></p><div class="notice"><strong>Registration is open</strong><span class="muted">You’ll receive a confirmation immediately.</span></div><button class="btn btn-primary" style="width:100%;margin-top:18px" onclick="toast('You’re registered! Confirmation sent.');closeModal()">Register now</button></div></div>
   <div class="toast" id="toast"></div>
 
-  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
   <script src="{{ url_for('static', filename='js/venue-booking.js') }}"></script>
   <script src="{{ url_for('static', filename='js/submit-event-request.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/venue-search.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/event-review.js') }}"></script>
 </body>
 </html>
