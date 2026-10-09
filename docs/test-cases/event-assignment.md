@@ -4,50 +4,61 @@
 
 | Test Case | Category | Acceptance Criterion / Behaviour Covered |
 |---|---|---|
-| TC-001 | Happy Path | Display unassigned event requests in the Event Coordinator workspace queue |
-| TC-002 | Happy Path | Assign an unassigned request to an active Event Coordinator, update the coordinator and event status, and notify the assigned coordinator |
-| TC-003 | Negative | Prevent another coordinator from claiming an event after it has been assigned |
+| TC-001 | Happy Path | AC1, AC4, AC5, AC6 — submitted event is auto-assigned to one coordinator, moves to `planning`, and both coordinator and organiser are notified |
+| TC-002 | Happy Path | AC3 — coordinator with the lowest active workload is selected |
+| TC-003 | Negative | AC2 — inactive coordinator is never assigned |
+| TC-004 | Negative | AC7 — event that already has a coordinator is not reassigned |
 
-### TC-001 — View the Unassigned Requests Queue
+### TC-001 — Auto-Assign a Submitted Event and Notify Both Parties
 
 | **Item** | **Content** |
 |---|---|
 | **Test Case ID** | TC-001 |
 | **Category** | Happy Path |
-| **Test Scenario** | Verify the Event Coordinator workspace displays requests that have not yet been assigned to a coordinator. |
-| **Pre-conditions** | - `coordinator.alpha@example.test` is authenticated and has the `event_coordinator` role.<br>- Event request `Northstar Industry Forum` exists with no assigned coordinator.<br>- Event request `Harbor Research Symposium` exists and is already assigned to a coordinator. |
-| **Test Steps** | 1. Open the Event Coordinator workspace.<br>2. View the `Unassigned Requests` queue. |
-| **Test Data** | `Unassigned event`: `Northstar Industry Forum`; status `Submitted`; coordinator: none<br>`Assigned event`: `Harbor Research Symposium`; coordinator: `coordinator.beta@example.test` |
-| **Expected Result** | - The `Unassigned Requests` queue is displayed.<br>- `Northstar Industry Forum` appears in the queue.<br>- `Harbor Research Symposium` does not appear in the unassigned queue. |
+| **Test Scenario** | Verify a submitted event is automatically assigned to one active coordinator, moves to `planning`, and both the coordinator and organiser receive notifications. |
+| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- `coordinator.alpha@example.test` has the `event_coordinator` role, an active profile, and no assigned events.<br>- No other active Event Coordinators exist. |
+| **Test Steps** | 1. As the organiser, create and submit the event request.<br>2. Open the submitted event's details.<br>3. View `coordinator.alpha@example.test`'s notifications.<br>4. View `organiser.one@example.test`'s notifications. |
+| **Test Data** | `Event Name`: `Northstar Industry Forum`<br>`Expected Attendance`: `150`<br>`Preferred Start`: `20 November 2026 09:00`<br>`Preferred End`: `20 November 2026 17:00` |
+| **Expected Result** | - The event's coordinator is `coordinator.alpha@example.test`.<br>- The event status is `planning`.<br>- `coordinator.alpha@example.test` has one new notification confirming ownership of `Northstar Industry Forum`.<br>- `organiser.one@example.test` has one new notification stating a coordinator has been assigned to `Northstar Industry Forum`. |
 
-### TC-002 — Assign an Unassigned Request to an Active Coordinator
+### TC-002 — Select the Coordinator with the Lowest Active Workload
 
 | **Item** | **Content** |
 |---|---|
 | **Test Case ID** | TC-002 |
 | **Category** | Happy Path |
-| **Test Scenario** | Verify an Event Coordinator can assign an unassigned request to an active Event Coordinator and the assignment, status transition, and ownership notification are reflected. |
-| **Pre-conditions** | - `coordinator.alpha@example.test` is authenticated and has the `event_coordinator` role.<br>- `coordinator.beta@example.test` is an active Event Coordinator.<br>- Event request `Northstar Industry Forum` exists with no assigned coordinator and status `Submitted`. |
-| **Test Steps** | 1. Open the `Unassigned Requests` queue.<br>2. Select `Northstar Industry Forum`.<br>3. Assign it to `coordinator.beta@example.test` using the available assignment control.<br>4. View the assigned event and the assigned coordinator's notifications. |
-| **Test Data** | `Event`: `Northstar Industry Forum`<br>`Assigning coordinator`: `coordinator.alpha@example.test`<br>`Assigned coordinator`: `coordinator.beta@example.test` (active; role `event_coordinator`)<br>`Event status before assignment`: `Submitted` |
-| **Expected Result** | - The event is assigned to `coordinator.beta@example.test`.<br>- The event status changes from `Submitted` to `In Review`.<br>- `coordinator.beta@example.test` receives an automated notification confirming ownership. |
+| **Test Scenario** | Verify the eligible coordinator with the fewest active events is selected. |
+| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- `coordinator.alpha@example.test` is active and assigned 3 events in `planning`.<br>- `coordinator.beta@example.test` is active and assigned 1 event in `planning`.<br>- No other active Event Coordinators exist. |
+| **Test Steps** | 1. As the organiser, create and submit the event request.<br>2. Open the submitted event's details.<br>3. View both coordinators' notifications. |
+| **Test Data** | `Event Name`: `Harbor Research Symposium`<br>`Expected Attendance`: `80` |
+| **Expected Result** | - The event's coordinator is `coordinator.beta@example.test`.<br>- The event status is `planning`.<br>- Only `coordinator.beta@example.test` receives an assignment notification for `Harbor Research Symposium`. |
 
-### TC-003 — Prevent a Second Coordinator from Claiming an Assigned Request
+### TC-003 — Inactive Coordinator Is Not Assigned
 
 | **Item** | **Content** |
 |---|---|
 | **Test Case ID** | TC-003 |
 | **Category** | Negative |
-| **Test Scenario** | Verify another Event Coordinator cannot claim an event after a coordinator has already been assigned. |
-| **Pre-conditions** | - `coordinator.alpha@example.test` and `coordinator.beta@example.test` are authenticated Event Coordinators.<br>- Event request `Northstar Industry Forum` is assigned to `coordinator.alpha@example.test`. |
-| **Test Steps** | 1. Open the Event Coordinator workspace as `coordinator.beta@example.test`.<br>2. Attempt to claim `Northstar Industry Forum` from the unassigned queue or event view.<br>3. View the event assignment and status. |
-| **Test Data** | `Event`: `Northstar Industry Forum`<br>`Current assigned coordinator`: `coordinator.alpha@example.test`<br>`Coordinator attempting claim`: `coordinator.beta@example.test` |
-| **Expected Result** | - The second coordinator cannot claim or assign the event.<br>- The event remains assigned to `coordinator.alpha@example.test`.<br>- The event's status is unchanged by the rejected claim. |
+| **Test Scenario** | Verify a coordinator with an inactive profile is excluded even when they have the lowest workload. |
+| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- `coordinator.gamma@example.test` has the `event_coordinator` role, `profile.active = false`, and no assigned events.<br>- `coordinator.beta@example.test` is active and assigned 2 events in `planning`.<br>- No other active Event Coordinators exist. |
+| **Test Steps** | 1. As the organiser, create and submit the event request.<br>2. Open the submitted event's details.<br>3. View `coordinator.gamma@example.test`'s notifications. |
+| **Test Data** | `Event Name`: `Lakeside Sustainability Workshop`<br>`Expected Attendance`: `40` |
+| **Expected Result** | - The event's coordinator is `coordinator.beta@example.test`.<br>- `coordinator.gamma@example.test` receives no assignment notification for this event. |
+
+### TC-004 — Event with an Existing Coordinator Is Not Reassigned
+
+| **Item** | **Content** |
+|---|---|
+| **Test Case ID** | TC-004 |
+| **Category** | Negative |
+| **Test Scenario** | Verify automatic assignment does not change the coordinator of an event that already has one. |
+| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- Event `Northstar Industry Forum` belongs to the organiser, is assigned to `coordinator.alpha@example.test`, and has status `changes_requested`.<br>- `coordinator.beta@example.test` is active and has fewer active events than `coordinator.alpha@example.test`. |
+| **Test Steps** | 1. As the organiser, open `Northstar Industry Forum`.<br>2. Resubmit the event request.<br>3. Open the event's details.<br>4. View both coordinators' notifications. |
+| **Test Data** | `Event Name`: `Northstar Industry Forum`<br>`Current Coordinator`: `coordinator.alpha@example.test`<br>`Status before resubmission`: `changes_requested` |
+| **Expected Result** | - The event's coordinator remains `coordinator.alpha@example.test`.<br>- The event status is `requested`.<br>- Neither coordinator receives a new assignment notification for this event. |
 
 ## Open Questions
 
-- Manual self-assignment or coordinator selection conflicts with the shared project rule that submitted events receive one coordinator through a fair automatic assignment approach. Should this story replace that rule or use automatic assignment instead?
-- The story uses `Submitted` and `In Review`, but these are not current event statuses. What existing statuses should represent these states, or has a status change been approved?
-- Who is authorized to assign a request to another coordinator, rather than to themselves?
-- The documented Row Level Security policy permits coordinators to update events already assigned to them, not to assign unassigned events. What approved access path should support this assignment?
-- The current notification policy documentation does not specify who may create notification records. What approved mechanism should trigger the ownership notification?
+- If no active Event Coordinator exists when an event is submitted, the event currently remains `requested` and unassigned. Should it be retried automatically later, surfaced to someone, or is this acceptable?
+- Should a user who holds both `event_organiser` and `event_coordinator` roles be excluded from being auto-assigned their own event?
+- Should `confirmed` events count toward a coordinator's active workload, or only `requested` / `changes_requested` / `planning`?
