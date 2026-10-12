@@ -8,6 +8,7 @@ from app.routes.submit_event_request_routes import event_request_bp
 from app.routes.venue_search import venue_search_blueprint
 from app.routes.event_reviews import event_reviews_blueprint
 from app.routes.event_assignment_routes import event_assignment_bp
+from app.routes.track_readiness_actions_routes import track_readiness_actions_bp
 
 
 app = Flask(__name__)
@@ -19,6 +20,7 @@ app.register_blueprint(event_request_bp)
 app.register_blueprint(venue_search_blueprint)
 app.register_blueprint(event_reviews_blueprint)
 app.register_blueprint(event_assignment_bp)
+app.register_blueprint(track_readiness_actions_bp)
 
 
 @app.route("/")
