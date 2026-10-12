@@ -8,6 +8,8 @@
 | TC-002 | Happy Path | AC3 — coordinator with the lowest active workload is selected |
 | TC-003 | Negative | AC2 — inactive coordinator is never assigned |
 | TC-004 | Negative | AC7 — event that already has a coordinator is not reassigned |
+| TC-005 | Happy Path | AC8 — coordinator sees only their own assigned events |
+| TC-006 | Happy Path | AC9 — organiser sees whether a coordinator has been assigned |
 
 ### TC-001 — Auto-Assign a Submitted Event and Notify Both Parties
 
@@ -56,6 +58,30 @@
 | **Test Steps** | 1. As the organiser, open `Northstar Industry Forum`.<br>2. Resubmit the event request.<br>3. Open the event's details.<br>4. View both coordinators' notifications. |
 | **Test Data** | `Event Name`: `Northstar Industry Forum`<br>`Current Coordinator`: `coordinator.alpha@example.test`<br>`Status before resubmission`: `changes_requested` |
 | **Expected Result** | - The event's coordinator remains `coordinator.alpha@example.test`.<br>- The event status is `requested`.<br>- Neither coordinator receives a new assignment notification for this event. |
+
+### TC-005 — Coordinator Views Their Assigned Events
+
+| **Item** | **Content** |
+|---|---|
+| **Test Case ID** | TC-005 |
+| **Category** | Happy Path |
+| **Test Scenario** | Verify the Assigned Events section lists only events assigned to the logged-in coordinator. |
+| **Pre-conditions** | - `coordinator.alpha@example.test` is authenticated with the `event_coordinator` role.<br>- `Northstar Industry Forum` is assigned to `coordinator.alpha@example.test` with status `planning`.<br>- `Harbor Research Symposium` is assigned to `coordinator.beta@example.test`. |
+| **Test Steps** | 1. Open the Event Coordinator workspace.<br>2. Select `Assigned Events`. |
+| **Test Data** | `Own event`: `Northstar Industry Forum`<br>`Other coordinator's event`: `Harbor Research Symposium` |
+| **Expected Result** | - `Northstar Industry Forum` is listed with status `Planning`.<br>- `Harbor Research Symposium` is not listed. |
+
+### TC-006 — Organiser Sees Coordinator Assignment on Their Event
+
+| **Item** | **Content** |
+|---|---|
+| **Test Case ID** | TC-006 |
+| **Category** | Happy Path |
+| **Test Scenario** | Verify the organiser can see whether a coordinator has been assigned to their event. |
+| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- `Northstar Industry Forum` belongs to the organiser and is assigned to `coordinator.alpha@example.test`.<br>- `Lakeside Sustainability Workshop` belongs to the organiser, has status `requested` and no coordinator. |
+| **Test Steps** | 1. Open `Northstar Industry Forum`.<br>2. Open `Lakeside Sustainability Workshop`. |
+| **Test Data** | `Assigned event`: `Northstar Industry Forum`<br>`Unassigned event`: `Lakeside Sustainability Workshop` |
+| **Expected Result** | - Northstar Industry Forum shows coordinator.alpha@example.test's profile name as the assigned Event Coordinator. |
 
 ## Open Questions
 

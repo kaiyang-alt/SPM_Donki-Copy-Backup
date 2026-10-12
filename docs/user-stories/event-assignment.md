@@ -13,6 +13,8 @@ As an Event Coordinator, I want submitted event requests to be automatically and
 - AC5: The assigned coordinator automatically receives a notification confirming ownership of the event.
 - AC6: The event organiser automatically receives a notification that a coordinator has been assigned to their event.
 - AC7: An event that already has a coordinator is not reassigned by automatic assignment.
+- AC8: An Event Coordinator can view the events assigned to them in the `Assigned Events` section of the coordinator workspace.
+- AC9: An Event Organiser can see on their event whether an Event Coordinator has been assigned, including the coordinator’s name.
 
 ## Relevant Customer Clarifications
 
@@ -38,7 +40,7 @@ As an Event Coordinator, I want submitted event requests to be automatically and
 
 ## Implementation Notes
 
-- Implemented as a `SECURITY DEFINER` trigger function on `event` (`docs/database/event-assignment.sql`). RLS prevents the application from reading other coordinators' roles/profiles or inserting notifications, so the assignment runs as a single controlled database operation. No tables, columns, status values or RLS policies were changed. This approach requires team approval.
+- Implemented as a `SECURITY DEFINER` trigger function on `event` (`docs/database/event-assignment.sql`). Organisers can read the assigned coordinator’s profile through the “Organisers can view assigned coordinator profiles” RLS policy.
 - Concurrent submissions are serialised with a transaction-level advisory lock to keep workload counts accurate.
 - If no active coordinator exists, the event remains `requested` and unassigned and no notifications are sent (see Open Questions in the test-case file).
 - Because assignment moves the event straight to `planning`, the organiser's direct-edit window (`draft` / `requested` / `changes_requested` under RLS) ends at submission; later amendments go through the event change request flow.
