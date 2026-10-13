@@ -61,8 +61,11 @@ function coordinatorLeadAssignmentPage(){
 function coordinatorLeadAssignmentRow(event){
   const options=coordinatorLeadAssignmentContext.coordinators.map(coordinator=>
     `<option value="${escapeAttribute(coordinator.user_id)}">${escapeHtml(coordinator.name)}</option>`).join('');
-  const date=event.preferred_start_datetime?new Date(event.preferred_start_datetime).toLocaleString():'Date not provided';
-  return `<form class="list-row coordinator-lead-assignment-form" data-event-id="${escapeAttribute(event.event_id)}"><div class="date-tile">?</div><div><h4>${escapeHtml(event.name||'Untitled event')}</h4><div class="muted">${escapeHtml(date)} · ${escapeHtml(event.expected_attendance??'Attendance not provided')} attendees · ${escapeHtml(event.status)}</div></div><div class="event-actions"><select name="coordinator_id" aria-label="Event Coordinator for ${escapeAttribute(event.name||'event')}" ${options?'':'disabled'}><option value="">Select coordinator</option>${options}</select><button class="btn btn-primary btn-small" type="submit" ${options?'':'disabled'}>Assign</button></div></form>`;
+  const start=event.preferred_start_datetime?new Date(event.preferred_start_datetime).toLocaleString():'Date not provided';
+  const end=event.preferred_end_datetime?new Date(event.preferred_end_datetime).toLocaleString():null;
+  const period=end?`${start} to ${end}`:start;
+  const attendance=event.expected_attendance??'Not provided';
+  return `<form class="list-row coordinator-lead-assignment-form" data-event-id="${escapeAttribute(event.event_id)}"><div class="date-tile">?</div><div><h4>${escapeHtml(event.name||'Untitled event')}</h4><div class="muted">${escapeHtml(event.event_id)} · ${escapeHtml(period)} · Expected attendance: ${escapeHtml(attendance)} · ${escapeHtml(event.status)}</div><span class="status pending">Unassigned</span></div><div class="event-actions"><select name="coordinator_id" aria-label="Event Coordinator for ${escapeAttribute(event.name||'event')}" ${options?'':'disabled'}><option value="">Select coordinator</option>${options}</select><button class="btn btn-primary btn-small" type="submit" ${options?'':'disabled'}>Assign</button></div></form>`;
 }
 
 function coordinatorLeadReassignmentRow(event){
