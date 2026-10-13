@@ -339,7 +339,9 @@ New code should use existing database-supported values instead of inventing new 
 - `event_coordinator_lead` is distinct from `event_coordinator`.
 - An Event Coordinator Lead assigns an unassigned request by setting `event.coordinator_id`; assignment does not change the `requested` status.
 - The newly assigned coordinator and Event Organiser are notified when assignment occurs.
-- Reassignment requires agreement between the outgoing and incoming coordinators.
+- Coordinator-initiated reassignment requires agreement between the outgoing and incoming coordinators.
+- An Event Coordinator Lead may directly replace an event's coordinator without either coordinator's approval.
+- Lead-controlled reassignment notifies the outgoing coordinator, incoming coordinator and Event Organiser.
 - The outgoing coordinator initiates reassignment.
 - The proposed new coordinator accepts or rejects it.
 

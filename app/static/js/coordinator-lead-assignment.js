@@ -1,13 +1,21 @@
 let coordinatorLeadAssignmentContext={events:[],coordinators:[]};
 let lastCoordinatorLeadAssignment=null;
+let coordinatorLeadReassignmentContext={events:[],coordinators:[]};
+let lastCoordinatorLeadReassignment=null;
 
 pages.lead={dashboard:coordinatorLeadAssignmentPage};
 
 async function loadCoordinatorLeadAssignmentContext(){
-  const response=await authenticatedFetch('/api/coordinator-lead/assignment-context');
-  const data=await response.json();
-  if(!response.ok)throw new Error(data.error||'Unable to load unassigned event requests.');
-  coordinatorLeadAssignmentContext={events:data.events||[],coordinators:data.coordinators||[]};
+  const [assignmentResponse,reassignmentResponse]=await Promise.all([
+    authenticatedFetch('/api/coordinator-lead/assignment-context'),
+    authenticatedFetch('/api/coordinator-lead/reassignment-context')
+  ]);
+  const assignmentData=await assignmentResponse.json();
+  const reassignmentData=await reassignmentResponse.json();
+  if(!assignmentResponse.ok)throw new Error(assignmentData.error||'Unable to load unassigned event requests.');
+  if(!reassignmentResponse.ok)throw new Error(reassignmentData.error||'Unable to load current event assignments.');
+  coordinatorLeadAssignmentContext={events:assignmentData.events||[],coordinators:assignmentData.coordinators||[]};
+  coordinatorLeadReassignmentContext={events:reassignmentData.events||[],coordinators:reassignmentData.coordinators||[]};
 }
 
 function coordinatorLeadAssignmentPage(){
@@ -16,8 +24,15 @@ function coordinatorLeadAssignmentPage(){
   const content=coordinatorLeadAssignmentContext.events.length
     ?coordinatorLeadAssignmentContext.events.map(coordinatorLeadAssignmentRow).join('')
     :'<div class="empty-state"><h3>No unassigned event requests</h3><p class="muted">All requested events currently have an Event Coordinator.</p></div>';
-  return pageHead('Assign unassigned event requests','Select a submitted request and give it a clear Event Coordinator owner.')+
-    assigned+`<section class="panel"><div class="panel-head"><h2>Unassigned requests</h2><button class="btn btn-soft btn-small" type="button" onclick="refreshCoordinatorLeadAssignments()">Refresh</button></div>${content}</section>`;
+  const reassigned=lastCoordinatorLeadReassignment
+    ?`<section class="panel" style="margin-bottom:20px"><div class="notice"><strong>Reassignment completed</strong><span class="muted">${escapeHtml(lastCoordinatorLeadReassignment.name||'Untitled event')} is now assigned to ${escapeHtml(lastCoordinatorLeadReassignment.coordinator_name||'the selected coordinator')}.</span></div></section>`:'';
+  const reassignmentContent=coordinatorLeadReassignmentContext.events.length
+    ?coordinatorLeadReassignmentContext.events.map(coordinatorLeadReassignmentRow).join('')
+    :'<div class="empty-state"><h3>No current assignments</h3><p class="muted">There are no assigned events available for reassignment.</p></div>';
+  return pageHead('Coordinator assignments','Assign submitted requests and update event ownership when necessary.')+
+    assigned+reassigned+
+    `<section class="panel" style="margin-bottom:20px"><div class="panel-head"><h2>Unassigned requests</h2><button class="btn btn-soft btn-small" type="button" onclick="refreshCoordinatorLeadAssignments()">Refresh</button></div>${content}</section>`+
+    `<section class="panel"><div class="panel-head"><h2>Current assignments</h2></div>${reassignmentContent}</section>`;
 }
 
 function coordinatorLeadAssignmentRow(event){
@@ -25,6 +40,13 @@ function coordinatorLeadAssignmentRow(event){
     `<option value="${escapeAttribute(coordinator.user_id)}">${escapeHtml(coordinator.name)}</option>`).join('');
   const date=event.preferred_start_datetime?new Date(event.preferred_start_datetime).toLocaleString():'Date not provided';
   return `<form class="list-row coordinator-lead-assignment-form" data-event-id="${escapeAttribute(event.event_id)}"><div class="date-tile">?</div><div><h4>${escapeHtml(event.name||'Untitled event')}</h4><div class="muted">${escapeHtml(date)} · ${escapeHtml(event.expected_attendance??'Attendance not provided')} attendees · ${escapeHtml(event.status)}</div></div><div class="event-actions"><select name="coordinator_id" aria-label="Event Coordinator for ${escapeAttribute(event.name||'event')}" ${options?'':'disabled'}><option value="">Select coordinator</option>${options}</select><button class="btn btn-primary btn-small" type="submit" ${options?'':'disabled'}>Assign</button></div></form>`;
+}
+
+function coordinatorLeadReassignmentRow(event){
+  const options=coordinatorLeadReassignmentContext.coordinators.filter(coordinator=>coordinator.user_id!==event.coordinator_id).map(coordinator=>
+    `<option value="${escapeAttribute(coordinator.user_id)}">${escapeHtml(coordinator.name)}</option>`).join('');
+  const date=event.preferred_start_datetime?new Date(event.preferred_start_datetime).toLocaleString():'Date not provided';
+  return `<form class="list-row coordinator-lead-reassignment-form" data-event-id="${escapeAttribute(event.event_id)}"><div class="date-tile">?</div><div><h4>${escapeHtml(event.name||'Untitled event')}</h4><div class="muted">${escapeHtml(date)} · Current coordinator: ${escapeHtml(event.coordinator_name||'Name unavailable')} · ${escapeHtml(event.status)}</div></div><div class="event-actions"><select name="coordinator_id" aria-label="Replacement Event Coordinator for ${escapeAttribute(event.name||'event')}" ${options?'':'disabled'}><option value="">Select replacement</option>${options}</select><button class="btn btn-primary btn-small" type="submit" ${options?'':'disabled'}>Reassign</button></div></form>`;
 }
 
 async function refreshCoordinatorLeadAssignments(){
@@ -49,5 +71,26 @@ document.getElementById('mainContent').addEventListener('submit',async event=>{
     await loadCoordinatorLeadAssignmentContext();
     renderPage();
     toast('Event Coordinator assigned.');
+  }catch(error){toast(error.message);button.disabled=false}
+});
+
+document.getElementById('mainContent').addEventListener('submit',async event=>{
+  const form=event.target.closest('.coordinator-lead-reassignment-form');
+  if(!form)return;
+  event.preventDefault();
+  const coordinatorId=form.elements.coordinator_id.value;
+  if(!coordinatorId){toast('Select a replacement Event Coordinator.');return}
+  const button=form.querySelector('button[type="submit"]');
+  button.disabled=true;
+  try{
+    const response=await authenticatedFetch(`/api/coordinator-lead/events/${encodeURIComponent(form.dataset.eventId)}/reassign`,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({coordinator_id:coordinatorId})
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error||'Unable to reassign the event.');
+    lastCoordinatorLeadReassignment=data.event;
+    await loadCoordinatorLeadAssignmentContext();
+    renderPage();
+    toast('Event Coordinator reassigned.');
   }catch(error){toast(error.message);button.disabled=false}
 });

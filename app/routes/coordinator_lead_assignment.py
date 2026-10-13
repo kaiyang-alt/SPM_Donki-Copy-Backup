@@ -4,6 +4,8 @@ from app.services.coordinator_lead_assignment_service import (
     CoordinatorLeadAssignmentError,
     assign_event,
     get_assignment_context,
+    get_reassignment_context,
+    reassign_event,
 )
 
 
@@ -34,6 +36,11 @@ def assignment_context():
     return _error_response(get_assignment_context)
 
 
+@coordinator_lead_assignment_blueprint.get("/reassignment-context")
+def reassignment_context():
+    return _error_response(get_reassignment_context)
+
+
 @coordinator_lead_assignment_blueprint.post("/events/<event_id>/assign")
 def assign(event_id):
     payload = request.get_json(silent=True)
@@ -42,5 +49,17 @@ def assign(event_id):
     return _error_response(
         lambda token: {
             "event": assign_event(token, event_id, payload.get("coordinator_id"))
+        }
+    )
+
+
+@coordinator_lead_assignment_blueprint.post("/events/<event_id>/reassign")
+def reassign(event_id):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify(error="A JSON object is required."), 400
+    return _error_response(
+        lambda token: {
+            "event": reassign_event(token, event_id, payload.get("coordinator_id"))
         }
     )
