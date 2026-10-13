@@ -15,10 +15,11 @@ def database():
     client.auth.get_user.return_value = SimpleNamespace(user=SimpleNamespace(id='coord'))
     event = {'event_id': 'evt', 'organiser_id': 'org', 'coordinator_id': 'coord',
              'status': 'requested', 'updated_at': '2026-09-18T00:00:00+00:00'}
-    tables = {name: MagicMock() for name in ['event', 'user_role', 'event_action_log', 'notification', 'equipment_reservation']}
+    tables = {name: MagicMock() for name in ['event', 'user_role', 'profile', 'event_action_log', 'notification', 'equipment_reservation']}
     client.table.side_effect = tables.__getitem__
     tables['event'].select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [event]
     tables['user_role'].select.return_value.eq.return_value.eq.return_value.execute.return_value.data = [{'role': 'event_coordinator'}]
+    tables['profile'].select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [{'name': 'Maya Tan'}]
     update = tables['event'].update.return_value
     update.eq.return_value = update
     update.is_.return_value = update
@@ -53,7 +54,29 @@ def test_organiser_can_read_message_history_and_equipment(database):
     equipment = [{'equipment': {'name': 'Microphone'}, 'quantity_requested': 3}]
     tables['event_action_log'].select.return_value.eq.return_value.order.return_value.execute.return_value.data = history
     tables['equipment_reservation'].select.return_value.eq.return_value.execute.return_value.data = equipment
-    assert get_review('token', 'evt') == {'event': event, 'actions': history, 'equipment': equipment}
+    assert get_review('token', 'evt') == {
+        'event': event,
+        'coordinator_name': 'Maya Tan',
+        'actions': history,
+        'equipment': equipment,
+    }
+
+
+def test_review_displays_the_assigned_coordinator_name(database):
+    _, tables, _ = database
+    result = get_review('token', 'evt')
+    assert result['coordinator_name'] == 'Maya Tan'
+    tables['profile'].select.return_value.eq.assert_called_once_with('user_id', 'coord')
+
+
+@pytest.mark.parametrize('coordinator_id', [None, 'other'])
+def test_unassigned_or_differently_assigned_coordinator_cannot_review(database, coordinator_id):
+    _, tables, event = database
+    event['coordinator_id'] = coordinator_id
+    with pytest.raises(ReviewError) as error:
+        submit_review('token', 'evt', {'status': 'planning'})
+    assert error.value.status == 403
+    tables['event'].update.assert_not_called()
 
 
 def test_unrelated_user_cannot_read_clarification_history(database):

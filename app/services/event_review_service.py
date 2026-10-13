@@ -58,9 +58,23 @@ def list_review_events(token):
 def get_review(token, event_id):
     client, user_id = _session(token)
     event = _event(client, user_id, event_id)
+    coordinator_name = _coordinator_name(client, event.get('coordinator_id'))
     actions = client.table('event_action_log').select('*').eq('event_id', event_id).order('created_at').execute().data or []
     reservations = client.table('equipment_reservation').select('quantity_requested,status,technical_requirements,equipment(name)').eq('event_id', event_id).execute().data or []
-    return {'event': event, 'actions': actions, 'equipment': reservations}
+    return {
+        'event': event,
+        'coordinator_name': coordinator_name,
+        'actions': actions,
+        'equipment': reservations,
+    }
+
+
+def _coordinator_name(client, coordinator_id):
+    if not coordinator_id:
+        return None
+    rows = (client.table('profile').select('name').eq('user_id', coordinator_id)
+            .limit(1).execute().data or [])
+    return rows[0].get('name') if rows else None
 
 
 def submit_review(token, event_id, payload):

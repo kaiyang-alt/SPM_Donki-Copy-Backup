@@ -95,12 +95,12 @@ async function openReview(id) {
 
 function reviewPage() {
   if (!reviewData) return pageHead('Request unavailable', 'Refresh your events and try again.');
-  const {event, actions, equipment} = reviewData;
+  const {event, coordinator_name: coordinatorName, actions, equipment} = reviewData;
   const coordinator = currentRole === 'coordinator';
   const editable = coordinator ? ['requested', 'changes_requested'].includes(event.status) : event.status === 'changes_requested';
   const history = actions.filter(action => ['clarification_requested', 'clarification_provided', 'review_completed'].includes(action.action_type));
   return pageHead('Review event request', reviewLabels[event.status] || event.status) +
-    `<section class="panel"><h2>${escapeHtml(event.name)}</h2>${reviewFields.map(([key,label]) => `<div class="equipment"><span>${label}</span><strong>${escapeHtml(event[key] ?? 'Not provided')}</strong></div>`).join('')}
+    `<section class="panel"><h2>${escapeHtml(event.name)}</h2><div class="equipment"><span>Assigned Event Coordinator</span><strong>${escapeHtml(coordinatorName || 'Not assigned')}</strong></div>${reviewFields.map(([key,label]) => `<div class="equipment"><span>${label}</span><strong>${escapeHtml(event[key] ?? 'Not provided')}</strong></div>`).join('')}
     <div class="equipment"><span>Technical support required</span><strong>${event.technical_support_required == null ? 'Not provided' : event.technical_support_required ? 'Yes' : 'No'}</strong></div>
     <h3>Equipment requests</h3>${equipment.length ? equipment.map(item => `<div class="equipment"><span>${escapeHtml(item.equipment?.name || 'Equipment')} · ${escapeHtml(item.status)}</span><strong>${escapeHtml(item.quantity_requested)} · ${escapeHtml(item.technical_requirements || '')}</strong></div>`).join('') : '<p class="muted">No equipment reservations recorded. Review the technical requirements above.</p>'}
     <h3>Clarification history</h3>${history.length ? history.map(action => `<div class="notice"><strong>${escapeHtml(action.action_type.replaceAll('_',' '))} · ${escapeHtml(action.created_at || '')}</strong><span>${escapeHtml(action.details)}</span></div>`).join('') : '<p class="muted">No clarification messages.</p>'}
