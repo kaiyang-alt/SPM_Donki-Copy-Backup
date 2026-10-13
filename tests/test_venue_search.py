@@ -10,6 +10,7 @@ from app.services.venue_search_service import VenueSearchError, _layout_capacity
 CRITERIA = {
     'start': '2026-11-20T01:00:00+00:00',
     'end': '2026-11-20T09:00:00+00:00',
+    'setup_minutes': 0, 'turnaround_minutes': 0,
     'guest_count': 150, 'layout': 'Theatre',
     'facilities': ['Projector', 'Sound system'],
 }
@@ -51,6 +52,8 @@ def test_search_matches_every_requirement_and_excludes_conflicts(create_client):
     assert [venue['venue_id'] for venue in results] == ['alcove']
     assert results[0]['layout_capacity'] == 180
     assert results[0]['available_start'] == CRITERIA['start']
+    assert results[0]['occupied_start'] == CRITERIA['start']
+    assert results[0]['temporary_unavailability'] == []
     booking_query = tables['venue_booking'].select.return_value
     booking_query.eq.assert_called_once_with('status', 'confirmed')
     booking_query.lt.assert_called_once_with('requested_start', CRITERIA['end'])
@@ -59,6 +62,81 @@ def test_search_matches_every_requirement_and_excludes_conflicts(create_client):
     block_query.eq.assert_called_once_with('status', 'active')
     block_query.lt.assert_called_once_with('start_datetime', CRITERIA['end'])
     block_query.gt.assert_called_once_with('end_datetime', CRITERIA['start'])
+
+
+@patch('app.services.venue_search_service.create_authenticated_supabase_client')
+def test_setup_and_turnaround_expand_the_conflict_window(create_client):
+    venue = {'venue_id': 'alcove', 'name': 'The Alcove', 'capacity': 180,
+             'facilities': ['Projector'], 'supported_layouts': ['Theatre']}
+    client, tables = _client([venue])
+    create_client.return_value = client
+    criteria = {
+        **CRITERIA, 'facilities': ['Projector'],
+        'setup_minutes': 60, 'turnaround_minutes': 30,
+    }
+
+    result = search_venues('token', criteria)[0]
+
+    assert result['occupied_start'] == '2026-11-20T00:00:00+00:00'
+    assert result['occupied_end'] == '2026-11-20T09:30:00+00:00'
+    assert result['event_start'] == CRITERIA['start']
+    assert result['event_end'] == CRITERIA['end']
+    assert result['setup_minutes'] == 60
+    assert result['turnaround_minutes'] == 30
+    booking_query = tables['venue_booking'].select.return_value
+    booking_query.lt.assert_called_once_with('requested_start', result['occupied_end'])
+    booking_query.gt.assert_called_once_with('requested_end', result['occupied_start'])
+    block_query = tables['venue_block'].select.return_value
+    block_query.lt.assert_called_once_with('start_datetime', result['occupied_end'])
+    block_query.gt.assert_called_once_with('end_datetime', result['occupied_start'])
+
+
+@patch('app.services.venue_search_service.create_authenticated_supabase_client')
+def test_multi_venue_search_returns_only_complete_distinct_combinations(create_client):
+    venues = [
+        {'venue_id': 'alcove', 'name': 'The Alcove', 'capacity': 180,
+         'facilities': ['Projector', 'Sound system'], 'supported_layouts': ['Theatre']},
+        {'venue_id': 'workshop-b', 'name': 'Workshop Room B', 'capacity': 60,
+         'facilities': ['Whiteboard', 'Video conferencing'], 'supported_layouts': ['Classroom']},
+        {'venue_id': 'workshop-c', 'name': 'Workshop Room C', 'capacity': 60,
+         'facilities': ['Whiteboard'], 'supported_layouts': ['Classroom']},
+    ]
+    client, _ = _client(venues)
+    create_client.return_value = client
+    criteria = {
+        'start': CRITERIA['start'], 'end': CRITERIA['end'],
+        'setup_minutes': 60, 'turnaround_minutes': 30, 'venue_count': 2,
+        'venue_requirements': [
+            {'guest_count': 150, 'layout': 'Theatre',
+             'facilities': ['Projector', 'Sound system']},
+            {'guest_count': 50, 'layout': 'Classroom',
+             'facilities': ['Whiteboard', 'Video conferencing']},
+        ],
+    }
+
+    results = search_venues('token', criteria)
+
+    assert len(results) == 1
+    assert [venue['venue_id'] for venue in results[0]['venues']] == ['alcove', 'workshop-b']
+    assert results[0]['occupied_start'] == '2026-11-20T00:00:00+00:00'
+    assert results[0]['occupied_end'] == '2026-11-20T09:30:00+00:00'
+
+
+@patch('app.services.venue_search_service.create_authenticated_supabase_client')
+def test_multi_venue_search_returns_none_when_any_requirement_has_no_match(create_client):
+    venues = [{'venue_id': 'alcove', 'name': 'The Alcove', 'capacity': 180,
+               'facilities': ['Projector'], 'supported_layouts': ['Theatre']}]
+    client, _ = _client(venues)
+    create_client.return_value = client
+    criteria = {
+        'start': CRITERIA['start'], 'end': CRITERIA['end'], 'venue_count': 2,
+        'venue_requirements': [
+            {'guest_count': 100, 'layout': 'Theatre', 'facilities': ['Projector']},
+            {'guest_count': 50, 'layout': 'Classroom', 'facilities': ['Whiteboard']},
+        ],
+    }
+
+    assert search_venues('token', criteria) == []
 
 
 def test_layout_capacity_supports_approved_json_column_shapes():
@@ -83,11 +161,26 @@ def test_search_returns_no_results_when_there_are_no_active_venues(create_client
     ({'guest_count': 0}, 'positive'),
     ({'layout': ''}, 'layout'),
     ({'facilities': []}, 'facility'),
+    ({'setup_minutes': -1}, 'Setup time'),
+    ({'turnaround_minutes': 1.5}, 'Turnaround time'),
 ])
 def test_invalid_search_criteria_are_rejected_before_database_access(change, message):
     criteria = {**CRITERIA, **change}
     with patch('app.services.venue_search_service.create_authenticated_supabase_client') as create_client:
         with pytest.raises(VenueSearchError, match=message):
+            search_venues('token', criteria)
+        create_client.assert_not_called()
+
+
+def test_multi_venue_search_requires_one_requirement_per_venue():
+    criteria = {
+        'start': CRITERIA['start'], 'end': CRITERIA['end'], 'venue_count': 2,
+        'venue_requirements': [
+            {'guest_count': 100, 'layout': 'Theatre', 'facilities': ['Projector']},
+        ],
+    }
+    with patch('app.services.venue_search_service.create_authenticated_supabase_client') as create_client:
+        with pytest.raises(VenueSearchError, match='every required venue'):
             search_venues('token', criteria)
         create_client.assert_not_called()
 
