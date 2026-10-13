@@ -29,7 +29,7 @@
 
   <div id="app" class="app hidden">
     <aside class="sidebar">
-      <div class="role-box"><label for="roleSelect">Viewing as</label><select id="roleSelect" onchange="selectRole(this.value)"><option value="organiser">Event Organiser</option><option value="coordinator">Event Coordinator</option><option value="venue">Venue Staff</option><option value="technical">Technical Staff (Demo)</option><option value="attendee">Attendee (Demo)</option></select></div>
+      <div class="role-box"><label for="roleSelect">Viewing as</label><select id="roleSelect" onchange="selectRole(this.value)"><option value="organiser">Event Organiser</option><option value="coordinator">Event Coordinator</option><option value="lead">Event Coordinator Lead</option><option value="venue">Venue Staff</option><option value="technical">Technical Staff (Demo)</option><option value="attendee">Attendee (Demo)</option></select></div>
       <nav class="side-nav" id="sideNav"></nav>
       <div class="side-bottom"><div class="user-chip"><div class="user-avatar" id="userInitial">EO</div><div><strong id="userName">Event Organiser</strong><small id="userRole">Organiser</small></div></div><button class="btn btn-outline logout-button" id="logoutButton" onclick="logout()">Log out</button></div>
     </aside>
@@ -58,5 +58,6 @@
   <script src="{{ url_for('static', filename='js/event-review.js') }}"></script>
   <script src="{{ url_for('static', filename='js/event-assignment.js') }}"></script>
   <script src="{{ url_for('static', filename='js/track-readiness-actions.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/coordinator-lead-assignment.js') }}"></script>
 </body>
 </html>

@@ -1,0 +1,46 @@
+from flask import Blueprint, jsonify, request
+
+from app.services.coordinator_lead_assignment_service import (
+    CoordinatorLeadAssignmentError,
+    assign_event,
+    get_assignment_context,
+)
+
+
+coordinator_lead_assignment_blueprint = Blueprint(
+    "coordinator_lead_assignment",
+    __name__,
+    url_prefix="/api/coordinator-lead",
+)
+
+
+def _token():
+    scheme, _, token = request.headers.get("Authorization", "").partition(" ")
+    return token.strip() if scheme.lower() == "bearer" else ""
+
+
+def _error_response(operation):
+    token = _token()
+    if not token:
+        return jsonify(error="Authentication is required."), 401
+    try:
+        return jsonify(operation(token)), 200
+    except CoordinatorLeadAssignmentError as exc:
+        return jsonify(error=str(exc)), exc.status
+
+
+@coordinator_lead_assignment_blueprint.get("/assignment-context")
+def assignment_context():
+    return _error_response(get_assignment_context)
+
+
+@coordinator_lead_assignment_blueprint.post("/events/<event_id>/assign")
+def assign(event_id):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify(error="A JSON object is required."), 400
+    return _error_response(
+        lambda token: {
+            "event": assign_event(token, event_id, payload.get("coordinator_id"))
+        }
+    )

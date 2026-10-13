@@ -1,0 +1,53 @@
+let coordinatorLeadAssignmentContext={events:[],coordinators:[]};
+let lastCoordinatorLeadAssignment=null;
+
+pages.lead={dashboard:coordinatorLeadAssignmentPage};
+
+async function loadCoordinatorLeadAssignmentContext(){
+  const response=await authenticatedFetch('/api/coordinator-lead/assignment-context');
+  const data=await response.json();
+  if(!response.ok)throw new Error(data.error||'Unable to load unassigned event requests.');
+  coordinatorLeadAssignmentContext={events:data.events||[],coordinators:data.coordinators||[]};
+}
+
+function coordinatorLeadAssignmentPage(){
+  const assigned=lastCoordinatorLeadAssignment
+    ?`<section class="panel" style="margin-bottom:20px"><div class="notice"><strong>Assignment completed</strong><span class="muted">${escapeHtml(lastCoordinatorLeadAssignment.name||'Untitled event')} is assigned to ${escapeHtml(lastCoordinatorLeadAssignment.coordinator_name||'the selected coordinator')} and remains requested.</span></div></section>`:'';
+  const content=coordinatorLeadAssignmentContext.events.length
+    ?coordinatorLeadAssignmentContext.events.map(coordinatorLeadAssignmentRow).join('')
+    :'<div class="empty-state"><h3>No unassigned event requests</h3><p class="muted">All requested events currently have an Event Coordinator.</p></div>';
+  return pageHead('Assign unassigned event requests','Select a submitted request and give it a clear Event Coordinator owner.')+
+    assigned+`<section class="panel"><div class="panel-head"><h2>Unassigned requests</h2><button class="btn btn-soft btn-small" type="button" onclick="refreshCoordinatorLeadAssignments()">Refresh</button></div>${content}</section>`;
+}
+
+function coordinatorLeadAssignmentRow(event){
+  const options=coordinatorLeadAssignmentContext.coordinators.map(coordinator=>
+    `<option value="${escapeAttribute(coordinator.user_id)}">${escapeHtml(coordinator.name)}</option>`).join('');
+  const date=event.preferred_start_datetime?new Date(event.preferred_start_datetime).toLocaleString():'Date not provided';
+  return `<form class="list-row coordinator-lead-assignment-form" data-event-id="${escapeAttribute(event.event_id)}"><div class="date-tile">?</div><div><h4>${escapeHtml(event.name||'Untitled event')}</h4><div class="muted">${escapeHtml(date)} · ${escapeHtml(event.expected_attendance??'Attendance not provided')} attendees · ${escapeHtml(event.status)}</div></div><div class="event-actions"><select name="coordinator_id" aria-label="Event Coordinator for ${escapeAttribute(event.name||'event')}" ${options?'':'disabled'}><option value="">Select coordinator</option>${options}</select><button class="btn btn-primary btn-small" type="submit" ${options?'':'disabled'}>Assign</button></div></form>`;
+}
+
+async function refreshCoordinatorLeadAssignments(){
+  try{await loadCoordinatorLeadAssignmentContext();renderPage()}catch(error){toast(error.message)}
+}
+
+document.getElementById('mainContent').addEventListener('submit',async event=>{
+  const form=event.target.closest('.coordinator-lead-assignment-form');
+  if(!form)return;
+  event.preventDefault();
+  const coordinatorId=form.elements.coordinator_id.value;
+  if(!coordinatorId){toast('Select an Event Coordinator.');return}
+  const button=form.querySelector('button[type="submit"]');
+  button.disabled=true;
+  try{
+    const response=await authenticatedFetch(`/api/coordinator-lead/events/${encodeURIComponent(form.dataset.eventId)}/assign`,{
+      method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({coordinator_id:coordinatorId})
+    });
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error||'Unable to assign the event request.');
+    lastCoordinatorLeadAssignment=data.event;
+    await loadCoordinatorLeadAssignmentContext();
+    renderPage();
+    toast('Event Coordinator assigned.');
+  }catch(error){toast(error.message);button.disabled=false}
+});

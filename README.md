@@ -22,13 +22,14 @@ The system supports:
 
 ## User Roles
 
-ConnectSphere supports five main roles:
+ConnectSphere supports six main roles:
 
 1. Event Organiser
 2. Event Coordinator
-3. Venue Staff
-4. Technical Support Staff
-5. Attendee
+3. Event Coordinator Lead
+4. Venue Staff
+5. Technical Support Staff
+6. Attendee
 
 A user may hold more than one role.
 

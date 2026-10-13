@@ -14,6 +14,7 @@ The main user roles are:
 
 - Event Organiser
 - Event Coordinator
+- Event Coordinator Lead
 - Venue Staff
 - Technical Support Staff
 - Attendee
@@ -334,7 +335,10 @@ New code should use existing database-supported values instead of inventing new 
 ### Coordinator Assignment
 
 - Each submitted event must have exactly one Event Coordinator.
-- Coordinator assignment should use a fair automatic assignment approach.
+- A newly submitted request remains in `requested` with no coordinator until an Event Coordinator Lead assigns it.
+- `event_coordinator_lead` is distinct from `event_coordinator`.
+- An Event Coordinator Lead assigns an unassigned request by setting `event.coordinator_id`; assignment does not change the `requested` status.
+- The newly assigned coordinator and Event Organiser are notified when assignment occurs.
 - Reassignment requires agreement between the outgoing and incoming coordinators.
 - The outgoing coordinator initiates reassignment.
 - The proposed new coordinator accepts or rejects it.

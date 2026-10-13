@@ -12,6 +12,7 @@ class AuthorisationError(Exception):
 SUPPORTED_LOGIN_ROLES = {
     "event_organiser",
     "event_coordinator",
+    "event_coordinator_lead",
     "venue_staff",
 }
 

@@ -154,3 +154,31 @@ def test_login_for_role_rejects_unsupported_role_without_authentication(mock_cre
     with pytest.raises(AuthorisationError):
         login_for_role("user@example.test", "password", "administrator")
     mock_create_client.assert_not_called()
+
+
+@patch("app.services.auth_service.create_supabase_client")
+def test_login_for_role_supports_distinct_coordinator_lead_role(mock_create_client):
+    client = MagicMock()
+    client.auth.sign_in_with_password.return_value = SimpleNamespace(
+        user=SimpleNamespace(id="lead-1", email="lead@example.test"),
+        session=SimpleNamespace(access_token="access", refresh_token="refresh"),
+    )
+    profile_query = MagicMock()
+    role_query = MagicMock()
+    profile_query.select.return_value.eq.return_value.limit.return_value.execute.return_value = (
+        SimpleNamespace(data=[{"user_id": "lead-1"}])
+    )
+    role_query.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = (
+        SimpleNamespace(data=[{"role": "event_coordinator_lead"}])
+    )
+    client.table.side_effect = lambda table: {
+        "profile": profile_query,
+        "user_role": role_query,
+    }[table]
+    mock_create_client.return_value = client
+
+    session = login_for_role(
+        "lead@example.test", "password", "event_coordinator_lead"
+    )
+
+    assert session["role"] == "event_coordinator_lead"
