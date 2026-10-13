@@ -4,6 +4,7 @@ from app.services.coordinator_lead_assignment_service import (
     CoordinatorLeadAssignmentError,
     assign_event,
     get_assignment_context,
+    get_current_assignments,
     get_reassignment_context,
     reassign_event,
 )
@@ -39,6 +40,11 @@ def assignment_context():
 @coordinator_lead_assignment_blueprint.get("/reassignment-context")
 def reassignment_context():
     return _error_response(get_reassignment_context)
+
+
+@coordinator_lead_assignment_blueprint.get("/current-assignments")
+def current_assignments():
+    return _error_response(get_current_assignments)
 
 
 @coordinator_lead_assignment_blueprint.post("/events/<event_id>/assign")

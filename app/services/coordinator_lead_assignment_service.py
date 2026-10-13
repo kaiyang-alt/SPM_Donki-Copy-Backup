@@ -5,6 +5,7 @@ from app.supabase_client import create_authenticated_supabase_client
 
 LEAD_ROLE = "event_coordinator_lead"
 COORDINATOR_ROLE = "event_coordinator"
+ACTIVE_EVENT_STATUSES = ("requested", "changes_requested", "planning", "confirmed")
 
 
 class CoordinatorLeadAssignmentError(Exception):
@@ -82,6 +83,37 @@ def get_reassignment_context(access_token):
     for event in events:
         event["coordinator_name"] = coordinator_names.get(event.get("coordinator_id"))
     return {"events": events, "coordinators": coordinators}
+
+
+def get_current_assignments(access_token):
+    client, _ = _lead_session(access_token)
+    try:
+        events = (
+            client.table("event")
+            .select(
+                "event_id,name,status,preferred_start_datetime,"
+                "preferred_end_datetime,start_datetime,end_datetime,coordinator_id"
+            )
+            .in_("status", list(ACTIVE_EVENT_STATUSES))
+            .order("preferred_start_datetime")
+            .execute()
+            .data
+            or []
+        )
+        coordinators = _coordinators(client)
+    except Exception as exc:
+        raise CoordinatorLeadAssignmentError(
+            "Unable to load current Event Coordinator assignments.", 502
+        ) from exc
+
+    coordinator_names = {
+        coordinator["user_id"]: coordinator["name"] for coordinator in coordinators
+    }
+    for event in events:
+        coordinator_id = event.get("coordinator_id")
+        event["coordinator_name"] = coordinator_names.get(coordinator_id)
+        event["assigned"] = coordinator_id is not None
+    return {"events": events, "active_statuses": list(ACTIVE_EVENT_STATUSES)}
 
 
 def assign_event(access_token, event_id, coordinator_id):

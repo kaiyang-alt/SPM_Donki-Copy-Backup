@@ -2,20 +2,43 @@ let coordinatorLeadAssignmentContext={events:[],coordinators:[]};
 let lastCoordinatorLeadAssignment=null;
 let coordinatorLeadReassignmentContext={events:[],coordinators:[]};
 let lastCoordinatorLeadReassignment=null;
+let coordinatorLeadCurrentAssignments=[];
 
-pages.lead={dashboard:coordinatorLeadAssignmentPage};
+pages.lead={dashboard:coordinatorLeadAssignmentPage,current:coordinatorLeadCurrentAssignmentsPage};
 
 async function loadCoordinatorLeadAssignmentContext(){
-  const [assignmentResponse,reassignmentResponse]=await Promise.all([
+  const [assignmentResponse,reassignmentResponse,currentResponse]=await Promise.all([
     authenticatedFetch('/api/coordinator-lead/assignment-context'),
-    authenticatedFetch('/api/coordinator-lead/reassignment-context')
+    authenticatedFetch('/api/coordinator-lead/reassignment-context'),
+    authenticatedFetch('/api/coordinator-lead/current-assignments')
   ]);
   const assignmentData=await assignmentResponse.json();
   const reassignmentData=await reassignmentResponse.json();
+  const currentData=await currentResponse.json();
   if(!assignmentResponse.ok)throw new Error(assignmentData.error||'Unable to load unassigned event requests.');
   if(!reassignmentResponse.ok)throw new Error(reassignmentData.error||'Unable to load current event assignments.');
+  if(!currentResponse.ok)throw new Error(currentData.error||'Unable to load active event assignments.');
   coordinatorLeadAssignmentContext={events:assignmentData.events||[],coordinators:assignmentData.coordinators||[]};
   coordinatorLeadReassignmentContext={events:reassignmentData.events||[],coordinators:reassignmentData.coordinators||[]};
+  coordinatorLeadCurrentAssignments=currentData.events||[];
+}
+
+function coordinatorLeadCurrentAssignmentsPage(){
+  const assigned=coordinatorLeadCurrentAssignments.filter(event=>event.assigned);
+  const unassigned=coordinatorLeadCurrentAssignments.filter(event=>!event.assigned);
+  const assignedContent=assigned.length?assigned.map(coordinatorLeadCurrentAssignmentRow).join(''):'<div class="empty-state"><h3>No active assigned events</h3><p class="muted">There are no active events with a current Event Coordinator.</p></div>';
+  const unassignedContent=unassigned.length?unassigned.map(coordinatorLeadCurrentAssignmentRow).join(''):'<div class="empty-state"><h3>No active unassigned requests</h3><p class="muted">All active event requests currently have an Event Coordinator.</p></div>';
+  return pageHead('Current Event Coordinator assignments','Oversee active events and identify requests that still need an owner.',`<div class="actions"><button class="btn btn-soft" type="button" onclick="refreshCoordinatorLeadAssignments()">Refresh</button></div>`)+
+    `<section class="panel" style="margin-bottom:20px"><div class="panel-head"><h2>Assigned active events</h2></div>${assignedContent}</section>`+
+    `<section class="panel"><div class="panel-head"><h2>Unassigned active requests</h2></div>${unassignedContent}</section>`;
+}
+
+function coordinatorLeadCurrentAssignmentRow(event){
+  const start=event.start_datetime||event.preferred_start_datetime;
+  const end=event.end_datetime||event.preferred_end_datetime;
+  const period=start?`${new Date(start).toLocaleString()}${end?` to ${new Date(end).toLocaleString()}`:''}`:'Date not provided';
+  const owner=event.assigned?`Coordinator: ${escapeHtml(event.coordinator_name||'Name unavailable')}`:'Unassigned';
+  return `<div class="list-row"><div class="date-tile">?</div><div><h4>${escapeHtml(event.name||'Untitled event')}</h4><div class="muted">${escapeHtml(event.event_id)} · ${escapeHtml(period)} · ${escapeHtml(event.status)}</div></div><span class="status ${event.assigned?'ready':'pending'}">${owner}</span></div>`;
 }
 
 function coordinatorLeadAssignmentPage(){

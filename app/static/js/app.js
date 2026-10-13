@@ -6,7 +6,7 @@ const events=[
     const roles={
       organiser:{name:'Ai Wei',initial:'AW',label:'Organiser',nav:[['⌂','Overview','dashboard'],['▣','My Events','events'],['＋','Create Event','create'],['~','Request Changes','changes'],['◌','Notifications','notifications']]},
       coordinator:{name:'Maya Tan',initial:'MT',label:'Event Coordinator',nav:[['⌂','Overview','dashboard'],['▣','Assigned Events','assignments'],['⌖','Venue Booking','venuebooking'],['✓','My Tasks','tasks'],['⇄','Reassignment','reassign'],['◌','Notifications','notifications']]},
-      lead:{name:'Event Coordinator Lead',initial:'EL',label:'Event Coordinator Lead',nav:[['⌂','Coordinator Assignments','dashboard']]},
+      lead:{name:'Event Coordinator Lead',initial:'EL',label:'Event Coordinator Lead',nav:[['⌂','Coordinator Assignments','dashboard'],['▣','Current Assignments','current']]},
       venue:{name:'Marcus Lim',initial:'ML',label:'Venue Staff',nav:[['⌂','Overview','dashboard'],['▦','Venue Schedule','schedule'],['▣','Booking Requests','bookings'],['✓','Setup Status','setup'],['◌','Notifications','notifications']]},
       technical:{name:'Nadia Rahman',initial:'NR',label:'Technical Staff',nav:[['⌂','Overview','dashboard'],['▣','My Assignments','assignments'],['⌘','Equipment','equipment'],['!','Technical Issues','issues'],['◌','Notifications','notifications']]},
       attendee:{name:'Jordan Lee',initial:'JL',label:'Attendee',nav:[['⌕','Browse Events','dashboard'],['▣','My Registrations','registrations'],['◌','Notifications','notifications']]}

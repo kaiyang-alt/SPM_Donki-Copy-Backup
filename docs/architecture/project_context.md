@@ -342,6 +342,8 @@ New code should use existing database-supported values instead of inventing new 
 - Coordinator-initiated reassignment requires agreement between the outgoing and incoming coordinators.
 - An Event Coordinator Lead may directly replace an event's coordinator without either coordinator's approval.
 - Lead-controlled reassignment notifies the outgoing coordinator, incoming coordinator and Event Organiser.
+- Event Coordinator Leads supervise all active events because the current schema has no Lead-to-event relationship.
+- Active events for Lead oversight are `requested`, `changes_requested`, `planning` and `confirmed`.
 - The outgoing coordinator initiates reassignment.
 - The proposed new coordinator accepts or rejects it.
 
