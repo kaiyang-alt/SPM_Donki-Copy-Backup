@@ -6,12 +6,47 @@ auth_bp = Blueprint("auth", __name__)
 from app.services.auth_service import (
     AuthenticationError,
     AuthorisationError,
+    login_user,
+    login_for_role,
     login_event_organiser,
     logout_event_organiser,
 )
 
 
 auth_blueprint = Blueprint("auth", __name__, url_prefix="/auth")
+
+
+@auth_blueprint.post("/application-login")
+def application_login():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip()
+    password = data.get("password", "")
+    if not email or not password:
+        return jsonify({"error": "Email and password are required."}), 400
+    try:
+        session = login_user(email, password)
+    except AuthenticationError as exc:
+        return jsonify({"error": str(exc)}), 401
+    except AuthorisationError as exc:
+        return jsonify({"error": str(exc)}), 403
+    return jsonify({"message": "Login successful.", **session}), 200
+
+
+@auth_blueprint.post("/role-login")
+def role_login():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip()
+    password = data.get("password", "")
+    role = str(data.get("role", "")).strip()
+    if not email or not password or not role:
+        return jsonify({"error": "Email, password, and role are required."}), 400
+    try:
+        session = login_for_role(email, password, role)
+    except AuthenticationError as exc:
+        return jsonify({"error": str(exc)}), 401
+    except AuthorisationError as exc:
+        return jsonify({"error": str(exc)}), 403
+    return jsonify({"message": "Login successful.", **session}), 200
 
 
 @auth_blueprint.post("/login")
