@@ -8,7 +8,6 @@ class AuthenticationError(Exception):
 class AuthorisationError(Exception):
     """Raised when an authenticated account lacks Event Organiser access."""
 
-
 SUPPORTED_LOGIN_ROLES = {
     "event_organiser",
     "event_coordinator",
