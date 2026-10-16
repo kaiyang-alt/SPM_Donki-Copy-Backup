@@ -18,3 +18,7 @@ As Venue Staff, I want to manage a venue's availability calendar, so that Event 
 - Venues and existing `venue_booking` rows exist for the venue under test.
 - RLS policies permit Venue Staff to insert into `venue_block` for their venue.
 - Event Coordinator venue search reads through the same RLS context.
+
+## Test Case Reference
+
+`docs/test-cases/manage-venue-availability.md`

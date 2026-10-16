@@ -11,3 +11,7 @@ Ensure that Venue Staff can:
 - Approve or reject a request, updating its status to Approved or Rejected immediately.
 - Concurrently evaluate requests: approving one request automatically prompts a warning to resolve or reject remaining overlapping pending requests.
 - Trigger an automated system notification to the submitting Event Coordinator, displaying the updated status (Approved or Rejected) on their request dashboard.
+
+## Test Case Reference
+
+`docs/test-cases/venue_staff.md`

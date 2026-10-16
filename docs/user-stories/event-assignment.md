@@ -40,7 +40,7 @@ As an Event Coordinator, I want submitted event requests to be automatically and
 
 ## Implementation Notes
 
-- Implemented as a `SECURITY DEFINER` trigger function on `event` (`docs/database/event-assignment.sql`). Organisers can read the assigned coordinator’s profile through the “Organisers can view assigned coordinator profiles” RLS policy.
-- Concurrent submissions are serialised with a transaction-level advisory lock to keep workload counts accurate.
-- If no active coordinator exists, the event remains `requested` and unassigned and no notifications are sent (see Open Questions in the test-case file).
-- Because assignment moves the event straight to `planning`, the organiser's direct-edit window (`draft` / `requested` / `changes_requested` under RLS) ends at submission; later amendments go through the event change request flow.
+- The current live Supabase state has assignment-related RLS policies.
+- There is currently no version-controlled SQL migration for event assignment.
+- The previously documented `SECURITY DEFINER` event-assignment trigger and advisory-lock implementation are not verified by the current repository or live structural snapshot.
+- The authoritative automatic-assignment database implementation must be confirmed when the migration baseline is established.
