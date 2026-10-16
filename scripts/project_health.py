@@ -109,6 +109,11 @@ def main() -> int:
     pytest_passed = pytest_result.returncode == 0
     print(f"{'PASS' if pytest_passed else 'FAIL'} | Full regression suite")
 
+    print("INFO | Running: python scripts/validate_docs.py", flush=True)
+    docs_result = run_command([sys.executable, "scripts/validate_docs.py"])
+    docs_passed = docs_result.returncode == 0
+    print(f"{'PASS' if docs_passed else 'FAIL'} | Documentation validation")
+
     print("INFO | Running: git diff --check HEAD", flush=True)
     diff_result = run_command(["git", "diff", "--check", "HEAD"])
     diff_passed = diff_result.returncode == 0
@@ -117,6 +122,7 @@ def main() -> int:
     required_checks = {
         "Production Flask app import": app_import_passed,
         "Full regression suite": pytest_passed,
+        "Documentation validation": docs_passed,
         "git diff --check HEAD": diff_passed,
     }
 

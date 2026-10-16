@@ -18,3 +18,7 @@ Ensure that the Event Organiser can:
 - View any venue or technical support arrangements that are still outstanding before the event can be confirmed.
 - View event details that reflect any approved change or rescheduling.
 - Be denied access when attempting to view an event they are not authorised to access, with the event details not displayed.
+
+## Test Case Reference
+
+`docs/test-cases/event-status-and-arrangements.md`
