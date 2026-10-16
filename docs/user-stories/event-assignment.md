@@ -2,13 +2,13 @@
 
 ## User Story
 
-As an Event Coordinator, I want submitted event requests to be automatically and fairly assigned to exactly one Event Coordinator so that every event has a clear owner for its planning and execution.
+As an Event Coordinator, I want submitted event requests to be automatically assigned to one Event Coordinator so that every event has a clear owner for its planning and execution.
 
 ## Acceptance Criteria
 
-- AC1: When an event request is submitted (status `requested`) without a coordinator, the system automatically assigns exactly one Event Coordinator.
-- AC2: Only users with the `event_coordinator` role and `profile.active = true` are eligible for assignment.
-- AC3: Assignment is fair: the eligible coordinator with the lowest active workload (assigned events in `requested`, `changes_requested`, `planning` or `confirmed`) is selected; ties go to the coordinator least recently given an event.
+- AC1: When an event request is submitted (status `requested`) without a coordinator, the system automatically assigns an Event Coordinator.
+- AC2: An event must have no more than one assigned Event Coordinator.
+- AC3: The customer has not specified how the system selects an Event Coordinator. No particular selection algorithm is required until the selection basis is confirmed.
 - AC4: On assignment, the event's `coordinator_id` is set and its status transitions from `requested` to `planning`.
 - AC5: The assigned coordinator automatically receives a notification confirming ownership of the event.
 - AC6: The event organiser automatically receives a notification that a coordinator has been assigned to their event.
@@ -18,8 +18,8 @@ As an Event Coordinator, I want submitted event requests to be automatically and
 
 ## Relevant Customer Clarifications
 
-- Each event must be automatically assigned to one Event Coordinator only.
-- The team may decide the auto-assignment logic (e.g. round-robin, workload, availability, event type) as long as it is fair, technically feasible and aligned with requirements.
+- Each event must be automatically assigned to an Event Coordinator and must have no more than one assigned coordinator.
+- The customer has not specified the coordinator-selection algorithm. The selection basis remains unresolved and must not be assumed.
 - Reassignment requires offline agreement between coordinators; the original coordinator initiates it and the new coordinator must accept. The reassignment workflow and UI are out of scope for this story.
 - `Submitted` maps to the existing status `requested`; `In Review` maps to `planning`.
 - Notifications are created automatically by the system, not by a user.
@@ -27,7 +27,7 @@ As an Event Coordinator, I want submitted event requests to be automatically and
 ## Preconditions / Dependencies
 
 - The event request creation/submission story produces events with status `requested` and no coordinator.
-- At least one user has the `event_coordinator` role and an active profile.
+- At least one user has the `event_coordinator` role.
 - Notification display belongs to the notification story; until it exists, notifications can be verified in the `notification` table.
 
 ## Test Case Reference
@@ -40,7 +40,6 @@ As an Event Coordinator, I want submitted event requests to be automatically and
 
 ## Implementation Notes
 
-- The current live Supabase state has assignment-related RLS policies.
-- There is currently no version-controlled SQL migration for event assignment.
-- The previously documented `SECURITY DEFINER` event-assignment trigger and advisory-lock implementation are not verified by the current repository or live structural snapshot.
-- The authoritative automatic-assignment database implementation must be confirmed when the migration baseline is established.
+- The current repository provides read-only views of assignment state but does not contain a confirmed automatic-assignment implementation.
+- There is no confirmed database assignment SQL file or named automatic-assignment trigger implementation in the current repository.
+- The automatic-assignment mechanism and coordinator-selection basis remain unresolved.

@@ -1,8 +1,7 @@
 """Event Assignment service.
 
-Assignment itself is performed automatically by the database trigger
-`trg_event_auto_assign_coordinator` (docs/database/event-assignment.sql).
-This service provides the read-only views of that assignment:
+The current repository does not contain the automatic-assignment mechanism.
+This service provides read-only views of assignment state:
 - a coordinator's Assigned Events list
 - an event's assignment status for its organiser or assigned coordinator
 """
