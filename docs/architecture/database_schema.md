@@ -120,7 +120,7 @@
 | `event_id` | `uuid` |  |
 | `requested_start` | `timestamptz` |  Nullable |
 | `requested_end` | `timestamptz` |  Nullable |
-| `status` | `text` |  Nullable |
+| `status` | `text` |  Nullable; CHECK permits `requested`, `tentative`, `confirmed`, `rejected`, `cancelled` |
 | `requested_by` | `uuid` |  |
 | `requested_at` | `timestamptz` |  Nullable |
 | `decided_by` | `uuid` |  Nullable |
@@ -140,7 +140,7 @@
 | `reason` | `text` |  Nullable |
 | `created_by` | `uuid` |  |
 | `created_at` | `timestamptz` |  Nullable |
-| `status` | `text` |  Nullable |
+| `status` | `text` |  Nullable; CHECK permits `active`, `cancelled` |
 
 ## Table `equipment`
 

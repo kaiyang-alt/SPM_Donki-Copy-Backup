@@ -296,6 +296,24 @@ rejected
 cancelled
 ```
 
+These are the only persisted values permitted by the live
+`venue_booking.status` CHECK constraint. User-interface wording such as
+`Pending Venue Approval` may represent `requested` or `tentative`, and
+`Approved` may represent `confirmed`; those labels are display text and must
+not be persisted as status values.
+
+### Venue Block
+
+```text
+active
+cancelled
+```
+
+These are the only persisted values permitted by the live
+`venue_block.status` CHECK constraint. Terms such as "blocked" or
+"unavailable" may describe an active block in the interface, but are not
+additional persisted status values.
+
 ### Event Change Request
 
 ```text

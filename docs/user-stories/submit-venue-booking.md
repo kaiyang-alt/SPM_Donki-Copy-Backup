@@ -11,13 +11,13 @@ As an Event Coordinator, I want to submit a formal venue booking request for an 
 - **AC3:** Successful submission places a tentative hold on the selected venue slot. An event must not have more than one active venue/time arrangement.
 - **AC4:** Persist the booking linked to its Event ID and Venue ID.
 - **AC5:** Notify the Venue Staff assigned to the selected venue through the Notification service.
-- **AC6:** Display “Pending Venue Approval” in the Coordinator event workspace and retain that status when the workspace is reloaded.
+- **AC6:** Display “Pending Venue Approval” in the Coordinator event workspace and retain that display label when the workspace is reloaded. The persisted booking status remains `requested` or `tentative`; the display text is not a database status.
 
 ## Confirmed Project Rules
 
 - The Coordinator submits the request; Venue Staff have final approval authority.
 - Only one active tentative or confirmed arrangement may apply to an event.
-- Existing venue-booking statuses are `requested`, `tentative`, `confirmed`, `rejected`, and `cancelled`. Do not introduce `approved` as an event or booking status.
+- The live `venue_booking.status` CHECK constraint permits exactly `requested`, `tentative`, `confirmed`, `rejected`, and `cancelled`. Do not persist UI labels such as `Pending Venue Approval` or `Approved` as event or booking statuses.
 - Both venue and equipment arrangements must be complete before confirming the event. Submitting or approving a venue booking must not automatically confirm the event.
 - Existing authentication, Supabase configuration, schema, and RLS must be preserved.
 
@@ -46,7 +46,7 @@ Automated route/service tests: `tests/test_venue_booking.py`. The fixture uses t
 
 ## Scope
 
-This story covers submission, holds, notification, and the Coordinator's pending status. Approval/rejection, venue editing, maintenance blocks, and staff schedule management are separate workflows. Existing handlers are retained and guarded, but their presence is not evidence that those stories have been accepted.
+This story covers submission, holds, notification, and the Coordinator's pending display state. Approval/rejection, venue editing, maintenance blocks, and staff schedule management are separate workflows. Existing handlers are retained and guarded, but their presence is not evidence that those stories have been accepted.
 
 ## Outstanding Integration Verification
 
