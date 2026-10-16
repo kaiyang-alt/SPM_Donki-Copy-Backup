@@ -35,10 +35,10 @@
 | **Test Case ID** | TC-002 |
 | **Category** | Happy Path |
 | **Test Scenario** | Verify that multiple booking requests shown as pending for the same venue are presented in the order they were submitted. |
-| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- Two or more booking requests with persisted status `requested` or `tentative` exist for the same venue.<br>- The requests have different `submitted_at` timestamps. |
+| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- Two or more booking requests with persisted status `requested` or `tentative` exist for the same venue.<br>- The requests have different `requested_at` timestamps. |
 | **Test Steps** | 1. Open the Venue Staff booking requests view.<br>2. Inspect the ordering of the displayed pending requests.<br>3. Compare the displayed order against each request's submission timestamp. |
 | **Test Data** | `Request A`: submitted at `2026-10-07T08:00:00Z`, persisted status `requested`<br>`Request B`: submitted at `2026-10-07T09:30:00Z`, persisted status `requested` |
-| **Expected Result** | - The earliest submitted request appears first.<br>- Later submissions appear in ascending `submitted_at` order.<br>- Ordering is consistent across repeated loads of the view. |
+| **Expected Result** | - The earliest submitted request appears first.<br>- Later submissions appear in ascending `requested_at` order.<br>- Ordering is consistent across repeated loads of the view. |
 
 ---
 
