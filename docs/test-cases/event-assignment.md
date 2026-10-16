@@ -4,12 +4,12 @@
 
 | Test Case | Category | Acceptance Criterion / Behaviour Covered |
 |---|---|---|
-| TC-001 | Happy Path | AC1, AC2, AC4, AC5, AC6 — submitted event is auto-assigned to no more than one coordinator, moves to `planning`, and both the assigned coordinator and organiser are notified |
-| TC-002 | Unresolved | AC3 — coordinator-selection basis is not specified and cannot yet be tested |
+| TC-001 | Happy Path | AC1, AC2, AC3, AC4, AC5 — submitted event is auto-assigned to no more than one coordinator, moves to `planning`, and both the assigned coordinator and organiser are notified |
+| TC-002 | Reserved / Deferred | No AC — reserved for coordinator-selection behaviour pending customer clarification; not currently executable |
 | TC-003 | Negative | AC1 — a user without the `event_coordinator` role is not assigned as the coordinator |
-| TC-004 | Negative | AC7 — event that already has a coordinator is not reassigned |
-| TC-005 | Happy Path | AC8 — coordinator sees only their own assigned events |
-| TC-006 | Happy Path | AC9 — organiser sees whether a coordinator has been assigned |
+| TC-004 | Negative | AC6 — event that already has a coordinator is not reassigned |
+| TC-005 | Happy Path | AC7 — coordinator sees only their own assigned events |
+| TC-006 | Happy Path | AC8 — organiser sees whether a coordinator has been assigned |
 
 ### TC-001 — Auto-Assign a Submitted Event and Notify Both Parties
 
@@ -23,17 +23,18 @@
 | **Test Data** | `Event Name`: `Northstar Industry Forum`<br>`Expected Attendance`: `150`<br>`Preferred Start`: `20 November 2026 09:00`<br>`Preferred End`: `20 November 2026 17:00` |
 | **Expected Result** | - The event has exactly one assigned coordinator, who is either `coordinator.alpha@example.test` or `coordinator.beta@example.test`; the test does not require one of them to be preferred.<br>- The event status is `planning`.<br>- Only the assigned coordinator has one new notification confirming ownership of `Northstar Industry Forum`.<br>- `organiser.one@example.test` has one new notification stating a coordinator has been assigned to `Northstar Industry Forum`. |
 
-### TC-002 — Coordinator Selection Basis Is Unresolved
+### TC-002 — RESERVED / DEFERRED: Coordinator Selection Basis
 
 | **Item** | **Content** |
 |---|---|
 | **Test Case ID** | TC-002 |
-| **Category** | Unresolved |
-| **Test Scenario** | A coordinator-selection test cannot be defined until an authoritative requirement confirms the selection basis. |
-| **Pre-conditions** | - The automatic coordinator-selection basis has been confirmed by an authoritative requirement. |
+| **Category** | Reserved / Deferred |
+| **Execution Status** | Not currently executable. This ID is reserved pending authoritative clarification of the coordinator-selection basis. |
+| **Test Scenario** | Deferred. A coordinator-selection test cannot be defined until an authoritative requirement confirms the selection basis. |
+| **Pre-conditions** | Not applicable while deferred. |
 | **Test Steps** | Not defined pending resolution of the Open Question below. |
-| **Test Data** | Not defined. |
-| **Expected Result** | Not defined. This test must not assume least workload, availability, skill matching, round-robin, or another selection method. |
+| **Test Data** | Not defined while deferred. |
+| **Expected Result** | Not defined while deferred. This reserved test must not assume least workload, availability, skill matching, round-robin, or another selection method. |
 
 ### TC-003 — User Without Event Coordinator Role Is Not Assigned
 
