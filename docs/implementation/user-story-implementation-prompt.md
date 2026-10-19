@@ -384,18 +384,112 @@ If direct verification is unavailable, request the minimum evidence needed or
 state clearly that live verification could not be independently performed. Do
 not claim verification without evidence.
 
-Once an approved shared database change is applied and verified where possible:
+For an approved and actually applied shared schema, RLS, status or constraint
+change, one designated developer/shared-change owner must:
 
-- update `docs/architecture/database_schema.md` to the resulting approved and
-  current structure; and
-- ensure any required migration is versioned according to the team's agreed
-  process.
+1. apply the team-approved change;
+2. verify it where possible;
+3. update `docs/architecture/database_schema.md` immediately to the resulting
+   approved and current structure; and
+4. commit the shared change according to the team's agreed migration process.
+
+Other affected story branches must consume, pull or rebase against that shared
+change rather than independently recreating or documenting it. If several
+stories depend on the same change, they must not each apply it.
 
 Do not document speculative or unapplied schema changes.
 
 Resume the story only after team approval, developer execution, verification
 or an explicit verification limitation, and required shared documentation are
 complete.
+
+## Shared Baseline Synchronisation Rule
+
+### Individual Story Branches
+
+Individual story branches may update their own canonical artifacts where
+applicable:
+
+- `docs/user-stories/<story-name>.md`
+- `docs/test-cases/<story-name>.md`
+- relevant story-level UML
+- relevant runtime files
+- relevant pytest files
+
+They must not normally modify `docs/architecture/project_context.md` or
+`docs/architecture/common_structure.md` merely because an approved story
+changes a shared project fact. Parallel story branches editing those shared
+baseline files create unnecessary merge conflicts and inconsistent baseline
+edits.
+
+### Shared Baseline Update Required
+
+If an approved story changes a project-wide business rule, role responsibility,
+shared workflow, service/domain responsibility or cross-story system fact, do
+not automatically update the shared baseline files from the ordinary story
+branch. Instead record this item in the story completion report:
+
+```text
+## Shared Baseline Update Required
+
+Affected document:
+<docs/architecture/project_context.md or docs/architecture/common_structure.md>
+
+Current shared rule/fact:
+<current baseline wording>
+
+Approved replacement:
+<approved wording>
+
+Origin:
+<story and approved requirement>
+
+Why reconciliation is required:
+<why the shared baseline needs later synchronisation>
+```
+
+Example:
+
+```text
+Affected document:
+docs/architecture/project_context.md
+
+Current shared rule:
+Submitted events are automatically assigned to an Event Coordinator.
+
+Approved replacement:
+Submitted events enter the unassigned queue and are assigned by the Event
+Coordinator Lead.
+
+Origin:
+<story / approved requirement>
+```
+
+Carry this item into the end-of-sprint baseline synchronisation task. Deferring
+the shared-document update does not mean the approved story requirement is
+incomplete.
+
+### End-of-Sprint / Integration Baseline Sync
+
+Synchronise `docs/architecture/project_context.md` through a dedicated shared
+baseline task after the relevant approved stories have been merged. Update
+`docs/architecture/common_structure.md` only when architecture or repository
+navigation genuinely changed.
+
+The baseline-sync task reviews:
+
+- stories merged during the sprint;
+- approved customer requirement changes;
+- approved Human Gate 3 decisions;
+- shared roles and workflows that changed; and
+- the existing `project_context.md` and `common_structure.md` content.
+
+It proposes the minimum required shared-document updates. Human/team review is
+required before the shared baseline-sync commit. If no shared baseline facts
+changed during the sprint, no baseline-document change is required.
+
+Do not automatically create this end-of-sprint commit from an individual story
+workflow.
 
 ---
 
@@ -560,6 +654,20 @@ After committing, report:
 - Acceptance Criterion -> functional test -> automated/manual traceability
 - schema, RLS or other shared changes used
 - known limitations or dependencies
+
+Where applicable, include this separate field:
+
+```text
+Shared Baseline Update Required:
+- None
+```
+
+or:
+
+```text
+Shared Baseline Update Required:
+- <document and approved shared fact needing end-of-sprint reconciliation>
+```
 
 Do not push.
 
