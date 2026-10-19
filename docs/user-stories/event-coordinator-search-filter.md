@@ -19,5 +19,7 @@ Allow the coordinator to change the search criteria and search again.
 - `facilities` supports the existing JSONB column as either a list of facility names or an object whose enabled keys are facility names.
 - Availability uses half-open interval overlap: an existing interval overlaps only when its start is before the requested end and its end is after the requested start.
 
+## Test Case Reference
 
+`docs/test-cases/event-coordinator-search-filter.md`
 

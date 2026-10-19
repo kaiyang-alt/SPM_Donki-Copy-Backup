@@ -1,42 +1,56 @@
 from flask import Blueprint, jsonify, request
-from app.services.event_service import EventNotFoundError, EventNotEditableError
 
-events_bp = Blueprint("events_api", __name__, url_prefix="/api/events")
-
-
-def list_authorised_events(token):
-    return []
-
-
-def update_authorised_event_name(token, event_id, new_name):
-    return {"event_id": event_id, "name": new_name}
+from app.services.event_service import (
+    EventAccessError,
+    EventNotEditableError,
+    EventNotFoundError,
+    list_authorised_events,
+    update_authorised_event_name,
+)
 
 
-@events_bp.route("", methods=["GET"])
+events_blueprint = Blueprint("events", __name__, url_prefix="/api/events")
+
+
+def _bearer_token() -> str | None:
+    scheme, _, token = request.headers.get("Authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        return None
+    return token.strip()
+
+
+@events_blueprint.get("")
 def get_events():
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+    access_token = _bearer_token()
+    if not access_token:
         return jsonify({"error": "Authentication is required."}), 401
 
-    token = auth_header.split(" ")[1]
-    events = list_authorised_events(token)
+    try:
+        events = list_authorised_events(access_token)
+    except EventAccessError:
+        return jsonify({"error": "The authenticated session is invalid."}), 401
+
     return jsonify({"events": events}), 200
 
 
-@events_bp.route("/<event_id>", methods=["PATCH"])
-def update_event_name(event_id):
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+@events_blueprint.patch("/<event_id>")
+def update_event(event_id: str):
+    access_token = _bearer_token()
+    if not access_token:
         return jsonify({"error": "Authentication is required."}), 401
 
-    token = auth_header.split(" ")[1]
-    data = request.get_json() or {}
-    new_name = data.get("name")
+    data = request.get_json(silent=True) or {}
+    event_name = str(data.get("name", "")).strip()
+    if not event_name:
+        return jsonify({"error": "Event name is required."}), 400
 
     try:
-        updated_event = update_authorised_event_name(token, event_id, new_name)
-        return jsonify({"event": updated_event}), 200
-    except EventNotFoundError as e:
-        return jsonify({"error": str(e)}), 404
-    except EventNotEditableError as e:
-        return jsonify({"error": str(e)}), 409
+        event = update_authorised_event_name(access_token, event_id, event_name)
+    except EventNotFoundError:
+        return jsonify({"error": "Event not found."}), 404
+    except EventNotEditableError as exc:
+        return jsonify({"error": str(exc)}), 409
+    except EventAccessError:
+        return jsonify({"error": "The event could not be updated."}), 403
+
+    return jsonify({"event": event}), 200

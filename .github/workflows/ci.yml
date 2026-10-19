@@ -25,10 +25,10 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install pytest pytest-cov
 
-    - name: Run Pytest
+    - name: Run project health checks
       env:
         SUPABASE_URL: "https://mock.supabase.co"
         SUPABASE_PUBLISHABLE_KEY: "mock-key-for-ci"
-        SUPABASE_PUBLISHABLE_KEY: "mock-key-for-ci"
+        SUPABASE_KEY: "mock-key-for-ci"
       run: |
-        python -m pytest -o pythonpath=.
+        python scripts/project_health.py

@@ -4,12 +4,12 @@
 
 | Test Case | Category | Acceptance Criterion / Behaviour Covered |
 |---|---|---|
-| TC-001 | Happy Path | AC1, AC4, AC5, AC6 — submitted event is auto-assigned to one coordinator, moves to `planning`, and both coordinator and organiser are notified |
-| TC-002 | Happy Path | AC3 — coordinator with the lowest active workload is selected |
-| TC-003 | Negative | AC2 — inactive coordinator is never assigned |
-| TC-004 | Negative | AC7 — event that already has a coordinator is not reassigned |
-| TC-005 | Happy Path | AC8 — coordinator sees only their own assigned events |
-| TC-006 | Happy Path | AC9 — organiser sees whether a coordinator has been assigned |
+| TC-001 | Happy Path | AC1, AC2, AC3, AC4, AC5 — submitted event is auto-assigned to no more than one coordinator, moves to `planning`, and both the assigned coordinator and organiser are notified |
+| TC-002 | Reserved / Deferred | No AC — reserved for coordinator-selection behaviour pending customer clarification; not currently executable |
+| TC-003 | Negative | AC1 — a user without the `event_coordinator` role is not assigned as the coordinator |
+| TC-004 | Negative | AC6 — event that already has a coordinator is not reassigned |
+| TC-005 | Happy Path | AC7 — coordinator sees only their own assigned events |
+| TC-006 | Happy Path | AC8 — organiser sees whether a coordinator has been assigned |
 
 ### TC-001 — Auto-Assign a Submitted Event and Notify Both Parties
 
@@ -17,35 +17,36 @@
 |---|---|
 | **Test Case ID** | TC-001 |
 | **Category** | Happy Path |
-| **Test Scenario** | Verify a submitted event is automatically assigned to one active coordinator, moves to `planning`, and both the coordinator and organiser receive notifications. |
-| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- `coordinator.alpha@example.test` has the `event_coordinator` role, an active profile, and no assigned events.<br>- No other active Event Coordinators exist. |
-| **Test Steps** | 1. As the organiser, create and submit the event request.<br>2. Open the submitted event's details.<br>3. View `coordinator.alpha@example.test`'s notifications.<br>4. View `organiser.one@example.test`'s notifications. |
+| **Test Scenario** | Verify a submitted event is automatically assigned to no more than one Event Coordinator without assuming which eligible coordinator is selected, moves to `planning`, and both the assigned coordinator and organiser receive notifications. |
+| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- `coordinator.alpha@example.test` and `coordinator.beta@example.test` have the `event_coordinator` role. |
+| **Test Steps** | 1. As the organiser, create and submit the event request.<br>2. Open the submitted event's details.<br>3. Record the assigned coordinator.<br>4. View both eligible coordinators' notifications.<br>5. View `organiser.one@example.test`'s notifications. |
 | **Test Data** | `Event Name`: `Northstar Industry Forum`<br>`Expected Attendance`: `150`<br>`Preferred Start`: `20 November 2026 09:00`<br>`Preferred End`: `20 November 2026 17:00` |
-| **Expected Result** | - The event's coordinator is `coordinator.alpha@example.test`.<br>- The event status is `planning`.<br>- `coordinator.alpha@example.test` has one new notification confirming ownership of `Northstar Industry Forum`.<br>- `organiser.one@example.test` has one new notification stating a coordinator has been assigned to `Northstar Industry Forum`. |
+| **Expected Result** | - The event has exactly one assigned coordinator, who is either `coordinator.alpha@example.test` or `coordinator.beta@example.test`; the test does not require one of them to be preferred.<br>- The event status is `planning`.<br>- Only the assigned coordinator has one new notification confirming ownership of `Northstar Industry Forum`.<br>- `organiser.one@example.test` has one new notification stating a coordinator has been assigned to `Northstar Industry Forum`. |
 
-### TC-002 — Select the Coordinator with the Lowest Active Workload
+### TC-002 — RESERVED / DEFERRED: Coordinator Selection Basis
 
 | **Item** | **Content** |
 |---|---|
 | **Test Case ID** | TC-002 |
-| **Category** | Happy Path |
-| **Test Scenario** | Verify the eligible coordinator with the fewest active events is selected. |
-| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- `coordinator.alpha@example.test` is active and assigned 3 events in `planning`.<br>- `coordinator.beta@example.test` is active and assigned 1 event in `planning`.<br>- No other active Event Coordinators exist. |
-| **Test Steps** | 1. As the organiser, create and submit the event request.<br>2. Open the submitted event's details.<br>3. View both coordinators' notifications. |
-| **Test Data** | `Event Name`: `Harbor Research Symposium`<br>`Expected Attendance`: `80` |
-| **Expected Result** | - The event's coordinator is `coordinator.beta@example.test`.<br>- The event status is `planning`.<br>- Only `coordinator.beta@example.test` receives an assignment notification for `Harbor Research Symposium`. |
+| **Category** | Reserved / Deferred |
+| **Execution Status** | Not currently executable. This ID is reserved pending authoritative clarification of the coordinator-selection basis. |
+| **Test Scenario** | Deferred. A coordinator-selection test cannot be defined until an authoritative requirement confirms the selection basis. |
+| **Pre-conditions** | Not applicable while deferred. |
+| **Test Steps** | Not defined pending resolution of the Open Question below. |
+| **Test Data** | Not defined while deferred. |
+| **Expected Result** | Not defined while deferred. This reserved test must not assume least workload, availability, skill matching, round-robin, or another selection method. |
 
-### TC-003 — Inactive Coordinator Is Not Assigned
+### TC-003 — User Without Event Coordinator Role Is Not Assigned
 
 | **Item** | **Content** |
 |---|---|
 | **Test Case ID** | TC-003 |
 | **Category** | Negative |
-| **Test Scenario** | Verify a coordinator with an inactive profile is excluded even when they have the lowest workload. |
-| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- `coordinator.gamma@example.test` has the `event_coordinator` role, `profile.active = false`, and no assigned events.<br>- `coordinator.beta@example.test` is active and assigned 2 events in `planning`.<br>- No other active Event Coordinators exist. |
-| **Test Steps** | 1. As the organiser, create and submit the event request.<br>2. Open the submitted event's details.<br>3. View `coordinator.gamma@example.test`'s notifications. |
+| **Test Scenario** | Verify that automatic assignment assigns a user with the `event_coordinator` role rather than a user without that role. |
+| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- `coordinator.beta@example.test` has the `event_coordinator` role.<br>- `organiser.two@example.test` does not have the `event_coordinator` role.<br>- No other Event Coordinators exist. |
+| **Test Steps** | 1. As the organiser, create and submit the event request.<br>2. Open the submitted event's details.<br>3. Inspect the assigned coordinator. |
 | **Test Data** | `Event Name`: `Lakeside Sustainability Workshop`<br>`Expected Attendance`: `40` |
-| **Expected Result** | - The event's coordinator is `coordinator.beta@example.test`.<br>- `coordinator.gamma@example.test` receives no assignment notification for this event. |
+| **Expected Result** | - The event has one assigned coordinator.<br>- The assigned user has the `event_coordinator` role.<br>- `organiser.two@example.test` is not assigned as the coordinator. |
 
 ### TC-004 — Event with an Existing Coordinator Is Not Reassigned
 
@@ -54,7 +55,7 @@
 | **Test Case ID** | TC-004 |
 | **Category** | Negative |
 | **Test Scenario** | Verify automatic assignment does not change the coordinator of an event that already has one. |
-| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- Event `Northstar Industry Forum` belongs to the organiser, is assigned to `coordinator.alpha@example.test`, and has status `changes_requested`.<br>- `coordinator.beta@example.test` is active and has fewer active events than `coordinator.alpha@example.test`. |
+| **Pre-conditions** | - `organiser.one@example.test` is authenticated with the `event_organiser` role.<br>- Event `Northstar Industry Forum` belongs to the organiser, is assigned to `coordinator.alpha@example.test`, and has status `changes_requested`.<br>- Another user has the `event_coordinator` role. |
 | **Test Steps** | 1. As the organiser, open `Northstar Industry Forum`.<br>2. Resubmit the event request.<br>3. Open the event's details.<br>4. View both coordinators' notifications. |
 | **Test Data** | `Event Name`: `Northstar Industry Forum`<br>`Current Coordinator`: `coordinator.alpha@example.test`<br>`Status before resubmission`: `changes_requested` |
 | **Expected Result** | - The event's coordinator remains `coordinator.alpha@example.test`.<br>- The event status is `requested`.<br>- Neither coordinator receives a new assignment notification for this event. |
@@ -85,6 +86,6 @@
 
 ## Open Questions
 
-- If no active Event Coordinator exists when an event is submitted, the event currently remains `requested` and unassigned. Should it be retried automatically later, surfaced to someone, or is this acceptable?
+- What coordinator-selection basis should the system use? The customer has not specified least workload, availability, skill matching, round-robin, or another algorithm.
+- If no Event Coordinator can be assigned when an event is submitted, should assignment be retried automatically later, surfaced to someone, or handled another way?
 - Should a user who holds both `event_organiser` and `event_coordinator` roles be excluded from being auto-assigned their own event?
-- Should `confirmed` events count toward a coordinator's active workload, or only `requested` / `changes_requested` / `planning`?

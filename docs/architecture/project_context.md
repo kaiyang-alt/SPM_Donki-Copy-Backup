@@ -333,8 +333,10 @@ New code should use existing database-supported values instead of inventing new 
 
 ### Coordinator Assignment
 
-- Each submitted event must have exactly one Event Coordinator.
-- Coordinator assignment should use a fair automatic assignment approach.
+- Submitted events must be automatically assigned to an Event Coordinator.
+- An event must have no more than one assigned Event Coordinator.
+- Coordinator assignment is automatic, but the customer has not specified the
+  coordinator-selection algorithm. The selection basis remains unresolved.
 - Reassignment requires agreement between the outgoing and incoming coordinators.
 - The outgoing coordinator initiates reassignment.
 - The proposed new coordinator accepts or rejects it.
