@@ -51,67 +51,27 @@ A user may hold more than one role.
 
 ```text
 SPM_Donki/
-│
 ├── app/
-│   ├── app.py
-│   ├── supabase_client.py
 │   ├── routes/
 │   ├── services/
+│   ├── static/
 │   ├── templates/
-│   └── static/
-│
+│   ├── app.py
+│   └── supabase_client.py
 ├── docs/
 │   ├── architecture/
-│   │   ├── common_structure.md
-│   │   └── project_context.md
-│   │
+│   ├── requirements/
 │   ├── user-stories/
-│   │   ├── README.md
-│   │   └── <story-name>.md
-│   │
 │   ├── test-cases/
-│   │   ├── README.md
-│   │   ├── functional-test-case-prompt.md
-│   │   └── <story-name>.md
-│   │
 │   ├── implementation/
-│   │   └── user-story-implementation-prompt.md
-│   │
 │   └── uml/
-│       ├── README.md
-│       └── <story-diagram>.md
-│
+├── scripts/
 ├── tests/
 ├── .github/
 ├── .env.example
 ├── .gitignore
 ├── AGENTS.md
-├── README.md
-└── requirements.txt
-
-```text
-SPM_Donki/
-│
-├── app/
-│   ├── app.py
-│   ├── supabase_client.py
-│   ├── routes/
-│   ├── services/
-│   ├── templates/
-│   └── static/
-│
-├── docs/
-│   ├── architecture/
-│   │   ├── common_structure.md
-│   │   └── project_context.md
-│   ├── uml/
-│   └── user-stories/
-│
-├── tests/
-├── .github/
-├── .env.example
-├── .gitignore
-├── AGENTS.md
+├── pytest.ini
 ├── README.md
 └── requirements.txt
 ```

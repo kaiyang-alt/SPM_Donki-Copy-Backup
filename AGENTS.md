@@ -84,3 +84,84 @@ Before coding:
 
 - Never commit `.env`, passwords or secret keys.
 - Use environment variables for Supabase configuration.
+
+## Repository Integrity and Structure Protection
+
+### Default Rule
+
+Do not delete, rename, move, replace or reorganise an existing tracked file or
+directory unless both:
+
+1. The assigned task genuinely requires the structural change.
+2. The developer or team explicitly approves it.
+
+### Before Creating a New File
+
+- Check whether an equivalent canonical file already exists.
+- Check whether the functionality belongs in an existing file.
+- If a shared or documented file appears unexpectedly missing, inspect Git
+  history where appropriate before creating a replacement.
+- Prefer restoring the canonical file instead of creating duplicate `-v2`,
+  `-new`, `-final` or `-latest` files.
+
+### Shared / Structural Files
+
+Treat at minimum the following as shared infrastructure:
+
+- `README.md`
+- `AGENTS.md`
+- `.gitignore`
+- `.env.example`
+- `.github/`
+- `app/app.py`
+- `app/supabase_client.py`
+- `docs/architecture/`
+- `docs/requirements/`
+- `docs/implementation/`
+- `scripts/`
+- `pytest.ini`
+- `requirements.txt`
+
+These files and directories may be modified when legitimately required, but
+changes must remain minimal and scoped.
+
+### Story Files
+
+Agents may update canonical files belonging to the assigned story, including:
+
+- `docs/user-stories/<story-name>.md`
+- `docs/test-cases/<story-name>.md`
+- relevant route, service, frontend and test files
+
+Do not modify another developer's story merely because it is related. Flag
+cross-story impacts instead.
+
+### Deletion Rule
+
+If an existing tracked file appears obsolete and deletion is proposed, stop and
+report:
+
+- the file or path
+- why it appears obsolete
+- its references and dependencies
+- whether a canonical replacement exists
+- the likely impact of deletion
+
+Explicit approval is required before deletion.
+
+### Structural Change Rule
+
+Explicit approval is required before:
+
+- deleting, renaming or moving files or folders
+- merging or splitting canonical files
+- introducing a new top-level directory
+- reorganising routes, services or tests
+- changing the shared application structure
+
+Do not perform structural refactoring merely for cleanliness.
+
+### Preserve Working Structure
+
+Prefer the smallest coherent change. Avoid unrelated formatting or rewrite
+churn.
