@@ -1,8 +1,8 @@
 # User Stories
 
-This folder stores the implementation context for ConnectSphere user stories.
-
-Each user story should have its own Markdown file.
+This folder stores the canonical story-specific requirements for ConnectSphere.
+Each user story should have one Markdown file at
+`docs/user-stories/<story-name>.md`.
 
 ## File Naming
 
@@ -24,11 +24,12 @@ Each user-story document should include, where applicable:
 
 - User Story
 - Acceptance Criteria
-- Test Cases
 - Relevant Customer Clarifications
 - Preconditions / Dependencies
+- Test Case Reference
 - Relevant UML Reference
 - Implementation Notes
+- Requirement Revision note, when useful
 
 ## Suggested Story Template
 
@@ -45,11 +46,11 @@ As a <role>, I want to <goal> so that <reason>.
 - AC2:
 - AC3:
 
-## Test Cases
+## Test Case Reference
 
-- TC1:
-- TC2:
-- TC3:
+`docs/test-cases/<story-name>.md`
+
+Do not embed the full functional test specification in this story file.
 
 ## Relevant Customer Clarifications
 
@@ -71,7 +72,27 @@ Example:
 
 - Add important implementation decisions or constraints here.
 - Keep notes within the scope of this user story.
+
+## Requirement Revision
+
+- Optional: note an approved requirement revision when it helps readers
+  understand the current story scope.
 ```
+
+Optional sections should be omitted when they add no value.
+
+## Canonical File Rule
+
+```text
+EXISTING STORY
+-> update its canonical file in place
+
+NEW CAPABILITY
+-> create one new canonical story file
+```
+
+Git history provides version history. Do not create `-v2`, `-new`, `-final` or
+`-latest` variants unless explicitly approved.
 
 ## Usage Rules
 

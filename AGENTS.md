@@ -4,10 +4,16 @@
 
 Before implementing any user story, review:
 
-1. `README.md`
-2. `docs/architecture/project_context.md`
-3. The relevant file under `docs/user-stories/`
-4. Relevant UML under `docs/uml/`, if applicable
+1. `README.md` for the repository and development overview.
+2. `docs/requirements/README.md` for requirement precedence.
+3. `docs/architecture/project_context.md` for the current reconciled project
+   baseline.
+4. `docs/architecture/database_schema.md` for the current approved/documented
+   database structure.
+5. The relevant file under `docs/user-stories/`.
+6. The corresponding functional test specification under `docs/test-cases/`,
+   where applicable.
+7. Relevant UML under `docs/uml/`, if applicable.
 
 Use `AGENTS.md` as the development rules for implementation.
 
@@ -36,28 +42,14 @@ route → service/business logic → Supabase
 
 ## Database
 
-Use the existing Supabase schema.
-
-Current application tables:
-
-- `profile`
-- `user_role`
-- `event`
-- `event_action_log`
-- `event_change_request`
-- `event_coordinator_reassignment`
-- `venue`
-- `venue_booking`
-- `venue_block`
-- `equipment`
-- `equipment_reservation`
-- `equipment_unavailability`
-- `registration`
-- `notification`
-
-Do not create, rename or modify tables, columns, relationships or status values without team agreement.
-
-Do not bypass existing Row Level Security policies without team agreement.
+- Use the current approved/documented database structure in
+  `docs/architecture/database_schema.md`.
+- Do not independently invent or modify tables, columns, relationships,
+  constraints, statuses or Row Level Security policies.
+- Shared database or RLS changes require team approval.
+- When an approved schema change is implemented,
+  `docs/architecture/database_schema.md` must also be updated as part of the
+  approved implementation workflow.
 
 ## User Story Implementation
 

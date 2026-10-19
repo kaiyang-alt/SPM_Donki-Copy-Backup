@@ -8,17 +8,36 @@ files.
 ## Source-of-Truth Priority
 
 1. Latest confirmed customer clarification
-2. Latest customer release or change
+2. Latest customer release/change
 3. Earlier confirmed customer clarifications
 4. Original customer briefing
-5. Approved User Story and Acceptance Criteria
+5. Approved User Story / Acceptance Criteria
 6. Approved Functional Test Specification
-7. Shared project context and architecture
-8. Current implementation or prototype
+7. Shared project context / architecture
+8. Current implementation / prototype
 
 A newer confirmed customer requirement overrides an older requirement where
-they conflict. Existing code or passing tests do not override confirmed
-customer requirements.
+they conflict. Existing code, prototype behaviour or passing tests do not
+override confirmed customer requirements.
+
+## Documentation Responsibilities
+
+| Document | Responsibility |
+| --- | --- |
+| `README.md` | Repository overview, setup and navigation |
+| `AGENTS.md` | Development and AI-agent guardrails |
+| `docs/requirements/README.md` | Requirement precedence and customer-change process |
+| `docs/architecture/project_context.md` | Current reconciled shared project baseline |
+| `docs/architecture/database_schema.md` | Current approved/documented database structure |
+| `docs/user-stories/<story-name>.md` | Approved story-specific requirement scope |
+| `docs/test-cases/<story-name>.md` | Approved functional test scenarios and Acceptance Criterion traceability |
+| `docs/test-cases/functional-test-case-prompt.md` | AI functional-test procedure |
+| `docs/implementation/user-story-implementation-prompt.md` | AI implementation and orchestration procedure |
+
+Current database limitations do not override newer confirmed customer
+requirements. If the current architecture cannot support an approved
+requirement, that is an implementation dependency to flag later, not a reason
+to weaken the requirement.
 
 ## Handling a New Customer Release
 
