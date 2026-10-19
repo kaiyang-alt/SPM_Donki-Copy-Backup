@@ -41,6 +41,11 @@ to weaken the requirement.
 
 ## Handling a New Customer Release
 
+The normal AI-assisted entry point is
+`docs/implementation/user-story-implementation-prompt.md`. It orchestrates the
+documented human approval gates for story/Acceptance Criteria, functional tests
+and any required shared-architecture change.
+
 ```text
 New or updated customer requirement
 -> identify affected existing stories

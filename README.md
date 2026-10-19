@@ -87,7 +87,7 @@ SPM_Donki/
 | `docs/architecture/database_schema.md` | Current approved/documented database structure |
 | `docs/user-stories/` | Canonical User Story cards |
 | `docs/test-cases/` | Functional test specifications |
-| `docs/implementation/` | Shared implementation workflow and prompt |
+| `docs/implementation/user-story-implementation-prompt.md` | Primary AI-assisted story workflow and orchestration entry point |
 
 ## Local Setup
 

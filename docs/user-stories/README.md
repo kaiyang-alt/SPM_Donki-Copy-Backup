@@ -113,18 +113,23 @@ If the story requires a change to the shared:
 
 raise it with the team before implementation.
 
-## AI Context
+## Primary AI-Assisted Workflow
 
-When using an AI coding assistant for a user story, provide:
+The normal entry point is:
 
 ```text
-README.md
-AGENTS.md
-docs/architecture/project_context.md
-docs/user-stories/<relevant-story>.md
-Relevant UML, if applicable
+docs/implementation/user-story-implementation-prompt.md
 ```
 
-The user-story document should define the scope of the feature being implemented.
+The developer supplies the assigned story or new feature area and the latest
+customer material where relevant. The orchestrator handles story reconciliation
+or creation, Human Gate 1, functional-test generation, Human Gate 2,
+implementation readiness, Human Gate 3 when shared approval is required, and
+implementation, testing and verification.
 
-The AI should not invent missing requirements or make shared architectural changes outside the story scope.
+The specialised functional-test prompt remains available as a standalone tool,
+but the orchestrator normally invokes it after Human Gate 1.
+
+The story file remains the canonical scope for the assigned feature. The AI
+must not invent missing requirements or make unapproved shared architectural
+changes.

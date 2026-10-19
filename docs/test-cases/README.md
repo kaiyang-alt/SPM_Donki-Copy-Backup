@@ -56,27 +56,29 @@ docs/test-cases/event-change-request.md
 docs/uml/event-change-request-sequence.md
 ```
 
-## Shared Test-Case Prompt
+## Primary AI-Assisted Workflow
 
-Use:
+The normal entry point is:
+
+```text
+docs/implementation/user-story-implementation-prompt.md
+```
+
+The developer supplies the assigned story or new feature area and the latest
+customer material where relevant. The orchestrator handles reconciliation or
+story creation, Human Gate 1, functional-test generation, Human Gate 2,
+implementation readiness, Human Gate 3 where required, and implementation,
+testing and verification.
+
+The specialised functional-test prompt remains available at:
 
 ```text
 docs/test-cases/functional-test-case-prompt.md
 ```
 
-to generate or review functional test cases consistently.
-
-Before using the prompt, provide the AI with:
-
-```text
-README.md
-AGENTS.md
-docs/architecture/project_context.md
-docs/user-stories/<relevant-story>.md
-docs/test-cases/functional-test-case-prompt.md
-```
-
-The generated test specification should then be reviewed by a human before being treated as approved.
+It is normally invoked by the orchestrator after the canonical story and
+Acceptance Criteria pass Human Gate 1, but it may also be used independently as
+a focused functional-test design tool.
 
 Human review and approval are required before an AI-generated functional test
 specification becomes approved implementation input.
