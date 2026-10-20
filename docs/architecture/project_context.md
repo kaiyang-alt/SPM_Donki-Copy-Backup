@@ -461,10 +461,17 @@ The current backend contains:
 POST /auth/login
 ```
 
-The existing login implementation currently remains in:
+The login route is registered by the canonical Flask application in
+`app/app.py`. Its route implementation lives in:
 
 ```text
-app/app.py
+app/routes/auth.py
+```
+
+and delegates authentication logic to:
+
+```text
+app/services/auth_service.py
 ```
 
 This is existing baseline functionality.
