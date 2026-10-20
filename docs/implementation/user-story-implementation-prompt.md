@@ -34,6 +34,17 @@ Customer material
 
 Work on only one assigned story/capability. Follow `AGENTS.md` throughout.
 
+A customer release may affect several stories, but this workflow does not
+recursively take ownership of them. Perform blast-radius analysis, record the
+dependency, and hand each affected story to its owner. Continue beyond
+reconciliation only for the currently assigned story or for a shared change
+that the team has explicitly assigned and approved as shared work.
+
+Use risk-proportional depth. Low-risk story work should not be forced through
+database, concurrency or architecture design that it does not require. Human
+Gate 3 exists only when a genuine shared schema, RLS, status, role, constraint
+or workflow decision is needed.
+
 ---
 
 # Phase 0 - Working Tree and Input Check
@@ -683,9 +694,22 @@ stop.
 
 # Cross-Story Boundary
 
-If another developer's story is affected, identify the story and dependency but
-do not implement that other story. Shared dependencies may be implemented only
-when explicitly approved as shared work.
+If another developer's story is affected:
+
+1. identify the affected story and the exact dependency;
+2. record what the current story needs from it;
+3. hand the impact to that story's owner; and
+4. stop at that boundary for the other story.
+
+Do not update the other story's canonical requirements or tests, start its human
+gates, design its database changes, or implement its runtime merely because the
+current story depends on it. Never recursively start a second story from inside
+this workflow.
+
+If the dependency blocks the current story, report the blocked Acceptance
+Criterion and stop or continue only the independently safe portion. Shared
+dependencies may be designed or implemented here only when the team explicitly
+assigns and approves them as shared work.
 
 # Direct Repository Editing
 
