@@ -1,12 +1,24 @@
 from datetime import datetime
 
 from app.supabase_client import create_authenticated_supabase_client
+from app.services.venue_occupancy import (
+    VenueOccupancyError, assess_candidate, caller_has_complete_venue_reads,
+    configuration,
+    load_occupancy_rows,
+)
 
 
 class VenueSearchError(Exception):
     def __init__(self, message, status=400):
         super().__init__(message)
         self.status = status
+
+
+class VenueSearchResults(list):
+    """Keep the existing list contract and expose incomplete assessments to UI."""
+    def __init__(self):
+        super().__init__()
+        self.assessment_limitations = []
 
 
 def search_venues(access_token, criteria):
@@ -38,32 +50,47 @@ def search_venues(access_token, criteria):
             raise VenueSearchError('Event Coordinator access is required.', 403)
         venues = client.table('venue').select('*').eq('active', True).execute().data or []
         if not venues:
-            return []
-        bookings = (client.table('venue_booking').select('venue_id')
-                    .eq('status', 'confirmed').lt('requested_start', end.isoformat())
-                    .gt('requested_end', start.isoformat()).execute().data or [])
-        blocks = (client.table('venue_block').select('venue_id')
-                  .eq('status', 'active').lt('start_datetime', end.isoformat())
-                  .gt('end_datetime', start.isoformat()).execute().data or [])
+            return VenueSearchResults()
+        # No raw-time prefilter: it would discard buffer-only conflicts.
+        bookings, bookings_complete = load_occupancy_rows(client, 'venue_booking')
+        blocks, blocks_complete = load_occupancy_rows(client, 'venue_block')
+        source_complete = bookings_complete and blocks_complete and caller_has_complete_venue_reads(client, user.id)
     except VenueSearchError:
         raise
     except Exception as exc:
         raise VenueSearchError('Unable to search venues.', 502) from exc
 
-    unavailable = {row['venue_id'] for row in bookings + blocks}
     requested = {_normalise(item) for item in facilities}
-    results = []
+    results = VenueSearchResults()
     for venue in venues:
         layout_capacity = _layout_capacity(venue, layout)
         available_facilities = _values(venue.get('facilities'))
-        if (venue.get('venue_id') not in unavailable and layout_capacity is not None
-                and layout_capacity >= guest_count and requested <= available_facilities):
+        if (layout_capacity is not None and layout_capacity >= guest_count and requested <= available_facilities):
+            try:
+                assessment = assess_candidate(
+                    venue, [row for row in bookings if row.get('venue_id') == venue['venue_id']],
+                    [row for row in blocks if row.get('venue_id') == venue['venue_id']],
+                    start, end, source_complete,
+                )
+            except VenueOccupancyError as exc:
+                results.assessment_limitations.append({'venue_id': venue['venue_id'], 'code': exc.code, 'reason': str(exc)})
+                continue
+            if not assessment['assessment_complete']:
+                results.assessment_limitations.append({
+                    'venue_id': venue['venue_id'], 'limitations': assessment['assessment_limitations'],
+                    'blockers': assessment['assessment_blockers'],
+                    'potential_conflicts': assessment['candidate_conflicts'],
+                })
+            if not assessment['available']:
+                continue
             results.append({
+                **configuration(venue),
                 'venue_id': venue.get('venue_id'), 'name': venue.get('name'),
                 'location': venue.get('location'), 'layout': layout,
                 'layout_capacity': layout_capacity,
                 'facilities': sorted(available_facilities),
                 'available_start': start.isoformat(), 'available_end': end.isoformat(),
+                'occupied_start': assessment['occupied_start'], 'occupied_end': assessment['occupied_end'],
             })
     return results
 

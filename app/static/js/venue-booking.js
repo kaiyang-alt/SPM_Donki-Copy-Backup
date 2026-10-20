@@ -76,6 +76,9 @@ function coordinatorBookingRows() {
           <div class="muted">
             ${escapeHtml(venue.name || booking.venue_id)}
             · ${escapeHtml(formatDateTime(booking.requested_start))}
+            <br>${escapeHtml(venueDurationText(venue))}
+            ${booking.occupied_start ? `<br>Occupied: ${escapeHtml(formatDateTime(booking.occupied_start))} – ${escapeHtml(formatDateTime(booking.occupied_end))}` : ''}
+            ${booking.occupancy_assessment === 'potential_hold_validity_unavailable' ? '<br>Potential hold — B2 validity unavailable.' : ''}
           </div>
         </div>
         <span class="status ${bookingStatusClass(booking.status)}">
@@ -212,7 +215,7 @@ async function checkVenueAvailability() {
     renderPage();
     if (!availableVenues.length) {
       document.getElementById('bookingError').textContent =
-        'No venues match the selected capacity, layout, and time slot.';
+        data.assessment_limitations?.length ? 'Availability cannot be established: configuration, booking visibility or B2 hold assessment is incomplete.' : 'No venues match the selected capacity, layout, and occupied period.';
     }
   } catch (requestError) {
     availableVenues = [];
@@ -373,6 +376,8 @@ function scheduleRows() {
         <div class="muted">
           ${escapeHtml(formatDateTime(item.requested_start || item.start_datetime))}
           –${escapeHtml(formatDateTime(item.requested_end || item.end_datetime))}
+          ${item.occupied_start ? `<br>Occupied: ${escapeHtml(formatDateTime(item.occupied_start))} – ${escapeHtml(formatDateTime(item.occupied_end))}` : '<br>Occupied period unavailable or inactive.'}
+          ${item.occupancy_assessment === 'potential_hold_validity_unavailable' ? '<br>Potential hold — B2 validity unavailable.' : ''}
         </div>
       </div>
     </div>
@@ -424,6 +429,8 @@ function venueSchedulePage() {
       </div>
     </section>
     ${selectedSchedule ? `<section class="panel" style="margin-top:20px">
+      <p>${escapeHtml(venueDurationText(selectedSchedule.configuration || {}))}</p>
+      ${b1AssessmentDisplay(selectedSchedule)}
       ${scheduleRows()}
     </section>` : ''}`;
 }

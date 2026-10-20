@@ -16,11 +16,16 @@ CRITERIA = {
 
 
 def _client(venues, bookings=None, blocks=None):
+    # Explicit fixture values, not application defaults or live population.
+    venues = [{"setup_minutes": 15, "turnaround_minutes": 15, "buffer_config_revision": 0, **venue} for venue in venues]
     client = MagicMock()
     client.auth.get_user.return_value = SimpleNamespace(user=SimpleNamespace(id='coordinator-1'))
     tables = {name: MagicMock() for name in ['user_role', 'venue', 'venue_booking', 'venue_block']}
     client.table.side_effect = tables.__getitem__
-    tables['user_role'].select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = [{'role': 'event_coordinator'}]
+    role_query = tables['user_role'].select.return_value
+    role_query.eq.return_value = role_query
+    role_query.limit.return_value = role_query
+    role_query.execute.return_value.data = [{'role': 'event_coordinator'}]
     tables['venue'].select.return_value.eq.return_value.execute.return_value.data = venues
     for name, rows in [('venue_booking', bookings or []), ('venue_block', blocks or [])]:
         query = tables[name].select.return_value
@@ -28,6 +33,7 @@ def _client(venues, bookings=None, blocks=None):
         query.lt.return_value = query
         query.gt.return_value = query
         query.execute.return_value.data = rows
+        query.execute.return_value.count = len(rows)
     return client, tables
 
 
@@ -52,13 +58,11 @@ def test_search_matches_every_requirement_and_excludes_conflicts(create_client):
     assert results[0]['layout_capacity'] == 180
     assert results[0]['available_start'] == CRITERIA['start']
     booking_query = tables['venue_booking'].select.return_value
-    booking_query.eq.assert_called_once_with('status', 'confirmed')
-    booking_query.lt.assert_called_once_with('requested_start', CRITERIA['end'])
-    booking_query.gt.assert_called_once_with('requested_end', CRITERIA['start'])
+    booking_query.lt.assert_not_called()
+    booking_query.gt.assert_not_called()
     block_query = tables['venue_block'].select.return_value
-    block_query.eq.assert_called_once_with('status', 'active')
-    block_query.lt.assert_called_once_with('start_datetime', CRITERIA['end'])
-    block_query.gt.assert_called_once_with('end_datetime', CRITERIA['start'])
+    block_query.lt.assert_not_called()
+    block_query.gt.assert_not_called()
 
 
 def test_layout_capacity_supports_approved_json_column_shapes():
@@ -117,3 +121,71 @@ def test_route_returns_matching_venues(search):
     assert response.status_code == 200
     assert response.get_json()['venues'][0]['name'] == 'The Alcove'
     search.assert_called_once_with('token', CRITERIA)
+
+
+@pytest.mark.parametrize('start,end', [('09:00', '09:15'), ('13:00', '13:30')])
+@patch('app.services.venue_search_service.create_authenticated_supabase_client')
+def test_search_detects_setup_and_turnaround_only_conflicts(create_client, start, end):
+    venue = {'venue_id': 'hall', 'capacity': 180, 'supported_layouts': ['Theatre'], 'facilities': CRITERIA['facilities'], 'setup_minutes': 30, 'turnaround_minutes': 45}
+    booking = {'venue_id': 'hall', 'booking_id': 'reference', 'status': 'confirmed', 'requested_start': '2027-03-10T10:00:00+08:00', 'requested_end': '2027-03-10T12:00:00+08:00'}
+    client, _ = _client([venue], [booking])
+    create_client.return_value = client
+    results = search_venues('token', {**CRITERIA, 'start': f'2027-03-10T{start}:00+08:00', 'end': f'2027-03-10T{end}:00+08:00'})
+    assert results == []
+    assert results.assessment_limitations == []  # A genuine, assessable conflict.
+
+
+@patch('app.services.venue_search_service.create_authenticated_supabase_client')
+def test_coordinator_only_complete_empty_reads_allow_availability(create_client):
+    venue = {'venue_id': 'hall', 'capacity': 180, 'supported_layouts': ['Theatre'], 'facilities': CRITERIA['facilities']}
+    client, tables = _client([venue])
+    create_client.return_value = client
+    results = search_venues('token', CRITERIA)
+    assert [row['venue_id'] for row in results] == ['hall']
+    assert results.assessment_limitations == []
+    create_client.assert_called_once_with('token')
+    tables['venue_booking'].select.assert_called_once_with('*', count='exact')
+    tables['venue_block'].select.assert_called_once_with('*', count='exact')
+
+
+@pytest.mark.parametrize('table', ['venue_booking', 'venue_block'])
+@pytest.mark.parametrize('count', [None, 1])
+@patch('app.services.venue_search_service.create_authenticated_supabase_client')
+def test_coordinator_only_truncated_or_unverified_read_is_not_available(create_client, table, count):
+    venue = {'venue_id': 'hall', 'capacity': 180, 'supported_layouts': ['Theatre'], 'facilities': CRITERIA['facilities']}
+    client, tables = _client([venue])
+    tables[table].select.return_value.execute.return_value.count = count
+    create_client.return_value = client
+    results = search_venues('token', CRITERIA)
+    assert not results
+    assert results.assessment_limitations
+
+
+@pytest.mark.parametrize('table,record,reason', [
+    ('venue_booking', {'booking_id': 'bad', 'status': 'confirmed', 'requested_start': None, 'requested_end': CRITERIA['end']}, 'confirmed_or_expanded_schedule_unassessable'),
+    ('venue_booking', {'booking_id': 'bad', 'status': None}, 'booking_lifecycle_classification_required'),
+    ('venue_block', {'venue_block_id': 'bad', 'status': 'active', 'start_datetime': CRITERIA['start'], 'end_datetime': None}, 'active_block_interval_unresolved_under_bounded_scope'),
+])
+@patch('app.services.venue_search_service.create_authenticated_supabase_client')
+def test_coordinator_only_malformed_occupancy_is_not_available(create_client, table, record, reason):
+    venue = {'venue_id': 'hall', 'capacity': 180, 'supported_layouts': ['Theatre'], 'facilities': CRITERIA['facilities']}
+    row = {'venue_id': 'hall', **record}
+    client, _ = _client([venue], [row] if table == 'venue_booking' else [], [row] if table == 'venue_block' else [])
+    create_client.return_value = client
+    results = search_venues('token', CRITERIA)
+    assert not results
+    assert results.assessment_limitations[0]['blockers'][0]['reason'] == reason
+    assert row == {'venue_id': 'hall', **record}
+
+
+@pytest.mark.parametrize('status', ['requested', 'tentative'])
+@patch('app.services.venue_search_service.create_authenticated_supabase_client')
+def test_hold_not_classified_from_status_alone(create_client, status):
+    venue = {'venue_id': 'hall', 'capacity': 180, 'supported_layouts': ['Theatre'], 'facilities': CRITERIA['facilities']}
+    hold = {'venue_id': 'hall', 'booking_id': 'hold', 'status': status, 'requested_start': CRITERIA['start'], 'requested_end': CRITERIA['end']}
+    client, _ = _client([venue], [hold])
+    create_client.return_value = client
+    results = search_venues('token', CRITERIA)
+    assert not results
+    assert results.assessment_limitations[0]['potential_conflicts'][0]['assessment'] == 'potential_hold_validity_unavailable'
+    assert hold['status'] == status

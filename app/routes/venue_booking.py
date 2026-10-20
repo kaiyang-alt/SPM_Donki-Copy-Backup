@@ -1,5 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app, g
 from werkzeug.exceptions import HTTPException
+from app.services.venue_buffer_service import read_buffer_notifications, read_venue_buffers, save_venue_buffers
+from app.services.venue_occupancy import VenueOccupancyError
 from app.services.venue_booking_service import (
     VenueBookingError,
     validate_booking_payload,
@@ -28,8 +30,12 @@ def require_authentication():
 
 
 @venue_booking_bp.errorhandler(VenueBookingError)
+@venue_booking_bp.errorhandler(VenueOccupancyError)
 def handle_booking_error(error):
-    return jsonify(success=False, error=str(error)), error.status_code
+    body = {"success": False, "error": str(error)}
+    if getattr(error, 'code', None):
+        body['code'] = error.code
+    return jsonify(body), error.status_code
 
 
 @venue_booking_bp.errorhandler(Exception)
@@ -48,6 +54,21 @@ def json_object():
     if not isinstance(data, dict):
         raise VenueBookingError('Request body must be a JSON object.')
     return data
+
+
+@venue_booking_bp.get('/api/venues/<venue_id>/buffers')
+def handle_read_venue_buffers(venue_id):
+    return jsonify(read_venue_buffers(g.venue_access_token, venue_id)), 200
+
+
+@venue_booking_bp.get('/api/venue-buffer-notifications')
+def handle_buffer_notifications():
+    return jsonify(read_buffer_notifications(g.venue_access_token)), 200
+
+
+@venue_booking_bp.put('/api/venues/<venue_id>/buffers')
+def handle_save_venue_buffers(venue_id):
+    return jsonify(save_venue_buffers(g.venue_access_token, venue_id, json_object())), 200
 
 
 @venue_booking_bp.route('/api/venue-bookings', methods=['POST'])

@@ -1,8 +1,9 @@
 from app.supabase_client import create_authenticated_supabase_client
+from app.services.venue_occupancy import assess_schedule, load_occupancy_rows
 
 
 CONFIRMED_STATUS = "confirmed"
-TENTATIVE_STATUSES = {"pending", "tentative"}
+TENTATIVE_STATUSES = {"requested", "tentative"}
 BLOCK_STATUS = "blocked"
 
 
@@ -37,26 +38,18 @@ def _venue_staff_client(access_token: str):
 def get_venue_availability(access_token: str, venue_id: str) -> dict:
     client = _venue_staff_client(access_token)
 
-    bookings = (
-        client.table("venue_booking")
-        .select("*")
-        .eq("venue_id", venue_id)
-        .execute()
-    ).data or []
+    bookings, bookings_complete = load_occupancy_rows(client, "venue_booking", venue_id)
+    blocks, blocks_complete = load_occupancy_rows(client, "venue_block", venue_id)
 
-    blocks = (
-        client.table("venue_block")
-        .select("*")
-        .eq("venue_id", venue_id)
-        .execute()
-    ).data or []
-
-    confirmed = [b for b in bookings if b.get("status") == CONFIRMED_STATUS]
+    venues = client.table("venue").select("*").eq("venue_id", venue_id).execute().data or []
+    assessment = assess_schedule(venues[0] if venues else {}, bookings, blocks, bookings_complete and blocks_complete)
+    confirmed = [b for b in assessment["bookings_and_holds"] if b.get("status") == CONFIRMED_STATUS]
     tentative = [
-        b for b in bookings if b.get("status") in TENTATIVE_STATUSES
+        b for b in assessment["bookings_and_holds"] if b.get("status") in TENTATIVE_STATUSES
     ]
 
     return {
+        **assessment,
         "venue_id": venue_id,
         "confirmed_bookings": confirmed,
         "tentative_holds": tentative,

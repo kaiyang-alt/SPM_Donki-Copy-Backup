@@ -23,4 +23,5 @@ def search():
         venues = search_venues(token, criteria)
     except VenueSearchError as exc:
         return jsonify(error=str(exc)), exc.status
-    return jsonify(venues=venues), 200
+    limitations = getattr(venues, 'assessment_limitations', [])
+    return jsonify(venues=venues, assessment_limitations=limitations, assessment_complete=not limitations), 200

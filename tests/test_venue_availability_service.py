@@ -49,17 +49,22 @@ def test_get_venue_availability_merges_bookings_and_blocks(mock_create):
         SimpleNamespace(data=[
             {"id": "REQ-100", "status": "confirmed", "start_time": "10:00", "end_time": "14:00"},
             {"id": "REQ-101", "status": "tentative", "start_time": "14:00", "end_time": "16:00"},
-            {"id": "REQ-102", "status": "pending", "start_time": "16:00", "end_time": "17:00"},
+            {"id": "REQ-102", "status": "requested", "start_time": "16:00", "end_time": "17:00"},
         ])
     )
     block_table.select.return_value.eq.return_value.execute.return_value = (
         SimpleNamespace(data=[{"id": "BLK-1", "date": "2026-12-05"}])
     )
+    venue_table = MagicMock()
+    venue_table.select.return_value.eq.return_value.execute.return_value.data = [
+        {"venue_id": "VENUE-1", "setup_minutes": 30, "turnaround_minutes": 45, "buffer_config_revision": 1}
+    ]
 
     client.table.side_effect = lambda name: {
         "user_role": role_query,
         "venue_booking": booking_table,
         "venue_block": block_table,
+        "venue": venue_table,
     }[name]
     mock_create.return_value = client
 
@@ -69,6 +74,8 @@ def test_get_venue_availability_merges_bookings_and_blocks(mock_create):
     assert len(result["confirmed_bookings"]) == 1
     assert len(result["tentative_holds"]) == 2
     assert len(result["blocks"]) == 1
+    assert not result["assessment_complete"]
+    assert result["assessment_blockers"]  # Legacy/malformed rows are retained, not free.
 
 
 @patch(

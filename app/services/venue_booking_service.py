@@ -2,10 +2,14 @@ from datetime import UTC, date, datetime, time, timedelta, timezone
 import re
 
 from app.supabase_client import create_authenticated_supabase_client
+from app.services.venue_occupancy import (
+    VenueOccupancyError, assess_candidate, assess_schedule,
+    caller_has_complete_venue_reads, configuration,
+    load_occupancy_rows,
+)
 
 
 SINGAPORE_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Singapore")
-ACTIVE_BOOKING_STATUSES = ("requested", "tentative", "confirmed")
 
 
 class VenueBookingError(Exception):
@@ -147,29 +151,39 @@ def execute_conflict_check(
     requested_start,
     requested_end,
     exclude_booking_id=None,
+    user_id=None,
 ):
-    """Check half-open timestamp ranges against active bookings and venue blocks."""
-    query = (
-        supabase.table("venue_booking")
-        .select("booking_id")
-        .eq("venue_id", venue_id)
-        .in_("status", ACTIVE_BOOKING_STATUSES)
-        .lt("requested_start", requested_end)
-        .gt("requested_end", requested_start)
+    """Use B1 occupancy; missing configuration/authority/hold validity is not free."""
+    assessment = venue_candidate_assessment(
+        supabase, venue_id, requested_start, requested_end, exclude_booking_id, user_id
     )
-    if exclude_booking_id:
-        query = query.neq("booking_id", exclude_booking_id)
-    if query.execute().data:
-        return True
-    return bool(
-        supabase.table("venue_block")
-        .select("venue_block_id")
-        .eq("venue_id", venue_id)
-        .lt("start_datetime", requested_end)
-        .gt("end_datetime", requested_start)
-        .execute()
-        .data
-    )
+    if assessment["assessment_blockers"]:
+        raise VenueOccupancyError("B1_AUTHORITATIVE_OCCUPANCY_UNASSESSABLE", "Authoritative venue occupancy requires owner review.")
+    if any(item["reason"] == "authoritative_booking_visibility_unavailable" for item in assessment["assessment_limitations"]):
+        raise VenueOccupancyError("B1_READ_CAPABILITY_REQUIRED", "Authoritative booking visibility is not available for this caller.")
+    if not assessment["assessment_complete"]:
+        raise VenueOccupancyError("B2_HOLD_VALIDITY_REQUIRED", "Hold validity is unavailable; preserve and review existing requests before proceeding.")
+    return bool(assessment["candidate_conflicts"])
+
+
+def venue_candidate_assessment(supabase, venue_id, start, end, exclude_booking_id=None, user_id=None):
+    venues = supabase.table("venue").select("*").eq("venue_id", venue_id).execute().data or []
+    if not venues:
+        raise VenueBookingError("Venue not found.", 404)
+    bookings, bookings_complete = load_occupancy_rows(supabase, "venue_booking", venue_id)
+    blocks, blocks_complete = load_occupancy_rows(supabase, "venue_block", venue_id)
+    # Excluding a request for approval never classifies that request as a valid
+    # active hold. B2 validity remains unresolved even for the selected record.
+    excluded_holds = [row for row in bookings if row.get("booking_id") == exclude_booking_id and row.get("status") in ("requested", "tentative")]
+    rows = [row for row in bookings if row.get("booking_id") != exclude_booking_id]
+    assessment = assess_candidate(venues[0], rows, blocks, start, end, bookings_complete and blocks_complete and user_id is not None and caller_has_complete_venue_reads(supabase, user_id))
+    if not bookings_complete or not blocks_complete:
+        assessment["assessment_limitations"].append({"reason": "occupancy_read_truncated_or_unverified"})
+    if excluded_holds:
+        assessment["assessment_limitations"].append({"booking_id": exclude_booking_id, "reason": "hold_validity_unavailable"})
+        assessment["assessment_complete"] = False
+        assessment["available"] = False
+    return assessment
 
 
 def get_coordinator_booking_context(access_token):
@@ -196,11 +210,16 @@ def get_coordinator_booking_context(access_token):
             .data
             or []
         )
+    visible_bookings = []
+    for booking in bookings:
+        venue = booking.get("venue") or next((row for row in venues if row["venue_id"] == booking["venue_id"]), {})
+        assessment = assess_schedule(venue, [booking], [], source_complete=False)
+        visible_bookings.append({**assessment["bookings_and_holds"][0], "assessment_limitations": assessment["assessment_limitations"]})
     return {
         "success": True,
         "events": events,
-        "venues": venues,
-        "bookings": bookings,
+        "venues": [{**venue, **configuration(venue)} for venue in venues],
+        "bookings": visible_bookings,
     }, 200
 
 
@@ -226,25 +245,27 @@ def list_available_venues(
     event = _event_for_coordinator(supabase, payload["event_id"], user_id)
     venues = supabase.table("venue").select("*").eq("active", True).execute().data or []
     available = []
+    limitations = []
     for venue in venues:
         if not _has_sufficient_capacity(venue, event):
             continue
         if not _supports_layout(venue, payload["setup_layout"]):
             continue
-        if not execute_conflict_check(
-            supabase,
-            venue["venue_id"],
-            payload["requested_start"],
-            payload["requested_end"],
-        ):
-            available.append(venue)
-    return {"success": True, "venues": available}, 200
+        try:
+            assessment = venue_candidate_assessment(supabase, venue["venue_id"], payload["requested_start"], payload["requested_end"], user_id=user_id)
+            if assessment["available"]:
+                available.append({**venue, **configuration(venue)})
+            if assessment["assessment_limitations"] or assessment["assessment_blockers"]:
+                limitations.append({"venue_id": venue["venue_id"], "limitations": assessment["assessment_limitations"], "blockers": assessment["assessment_blockers"]})
+        except VenueOccupancyError as exc:
+            limitations.append({"venue_id": venue["venue_id"], "code": exc.code, "reason": str(exc)})
+    return {"success": True, "venues": available, "assessment_limitations": limitations, "assessment_complete": not limitations}, 200
 
 
 def submit_venue_booking_request(
     access_token, event_id, venue_id, booking_date, start_time, end_time, setup_layout
 ):
-    """Create a requested booking, which acts as the tentative hold."""
+    """Retain the requested-booking workflow without inventing hold validity."""
     payload = validate_booking_payload(
         {
             "event_id": event_id,
@@ -260,18 +281,20 @@ def submit_venue_booking_request(
     _eligible_venue(supabase, payload["venue_id"], event, payload["setup_layout"])
     existing = (
         supabase.table("venue_booking")
-        .select("booking_id")
+        .select("booking_id,status")
         .eq("event_id", payload["event_id"])
-        .in_("status", ACTIVE_BOOKING_STATUSES)
         .execute()
     )
-    if existing.data:
-        raise VenueBookingError("This event already has an active venue arrangement.", 409)
+    if any(row.get("status") == "confirmed" for row in existing.data or []):
+        raise VenueBookingError("This event already has a confirmed venue arrangement.", 409)
+    if any(row.get("status") not in ("confirmed", "rejected", "cancelled") for row in existing.data or []):
+        raise VenueOccupancyError("B2_HOLD_VALIDITY_REQUIRED", "An existing request requires authoritative hold/lifecycle assessment before another arrangement.")
     if execute_conflict_check(
         supabase,
         payload["venue_id"],
         payload["requested_start"],
         payload["requested_end"],
+        user_id=user_id,
     ):
         raise VenueBookingError(
             "The selected venue slot is unavailable due to an existing booking or blackout period.",
@@ -329,7 +352,7 @@ def get_venue_staff_context(access_token):
     """Return the venue catalogue needed by authenticated Venue Staff tools."""
     supabase, _ = authenticated_venue_client(access_token, "venue_staff")
     venues = supabase.table("venue").select("*").execute().data or []
-    return {"success": True, "venues": venues}, 200
+    return {"success": True, "venues": [{**venue, **configuration(venue)} for venue in venues]}, 200
 
 
 def _get_booking(supabase, booking_id):
@@ -383,6 +406,7 @@ def approve_venue_booking_request(access_token, booking_id):
         booking["requested_start"],
         booking["requested_end"],
         exclude_booking_id=booking_id,
+        user_id=user_id,
     ):
         raise VenueBookingError("Cannot approve a conflicting venue request.", 409)
     updated_booking = _update_pending_booking(
@@ -515,22 +539,12 @@ def update_venue_details(
 
 def get_venue_schedule(access_token, venue_id):
     supabase, _ = authenticated_venue_client(access_token, "venue_staff")
-    bookings = (
-        supabase.table("venue_booking")
-        .select("*")
-        .eq("venue_id", venue_id)
-        .execute()
-    )
-    blocks = (
-        supabase.table("venue_block")
-        .select("*")
-        .eq("venue_id", venue_id)
-        .execute()
-    )
+    bookings, bookings_complete = load_occupancy_rows(supabase, "venue_booking", venue_id)
+    blocks, blocks_complete = load_occupancy_rows(supabase, "venue_block", venue_id)
+    venues = supabase.table("venue").select("*").eq("venue_id", venue_id).execute().data or []
+    if not venues:
+        raise VenueBookingError("Venue not found.", 404)
     return {
         "success": True,
-        "schedule": {
-            "bookings_and_holds": bookings.data or [],
-            "maintenance_blocks": blocks.data or [],
-        },
+        "schedule": assess_schedule(venues[0], bookings, blocks, bookings_complete and blocks_complete),
     }, 200

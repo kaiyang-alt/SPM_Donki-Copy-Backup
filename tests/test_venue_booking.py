@@ -63,7 +63,7 @@ class Query:
         if allowed is not None and column not in allowed:
             raise AssertionError(f"{self.table}.{column} is not in the live schema")
 
-    def select(self, columns):
+    def select(self, columns, count=None):
         allowed = LIVE_TABLE_COLUMNS.get(self.table)
         if allowed is not None:
             for column in (part.strip() for part in columns.split(",")):
@@ -85,6 +85,9 @@ class Query:
     def in_(self, column, values):
         self._validate_column(column)
         self.filters.append(lambda row: row.get(column) in values)
+        return self
+
+    def limit(self, count):
         return self
 
     def lt(self, column, value):
@@ -151,7 +154,7 @@ class Query:
         if self.operation == "update":
             for row in selected:
                 row.update(self.payload)
-        return SimpleNamespace(data=deepcopy(selected))
+        return SimpleNamespace(data=deepcopy(selected), count=len(selected))
 
 
 class Database:
@@ -174,6 +177,9 @@ class Database:
                     "capacity": 100,
                     "supported_layouts": ["Banquet", "Theatre"],
                     "active": True,
+                    "setup_minutes": 15,
+                    "turnaround_minutes": 15,
+                    "buffer_config_revision": 0,
                 }
             ],
             "venue_booking": [],
@@ -406,11 +412,11 @@ def test_event_cannot_have_second_active_arrangement(client, database, status):
         (END, "2026-11-15T14:00:00+08:00"),
     ],
 )
-def test_back_to_back_bookings_are_allowed(client, database, start, end):
+def test_scheduled_back_to_back_bookings_conflict_with_buffers(client, database, start, end):
     database.rows["venue_booking"].append(
         active_booking(requested_start=start, requested_end=end, status="confirmed")
     )
-    assert submit(client).status_code == 201
+    assert submit(client).status_code == 409
 
 
 @pytest.mark.parametrize("status", ["rejected", "cancelled"])
@@ -448,15 +454,15 @@ def test_service_validates_direct_calls(database):
 
 
 @pytest.mark.parametrize("status", ["requested", "tentative"])
-def test_staff_approval_uses_confirmed_status_and_audit_fields(client, database, status):
+def test_staff_approval_preserves_request_until_b2_validity_exists(client, database, status):
     database.auth.get_user.return_value.user.id = "STAFF-1"
     database.rows["venue_booking"].append(active_booking(booking_id="booking", status=status))
     response = client.post("/api/venue-bookings/booking/approve", headers=HEADERS)
-    assert response.status_code == 200
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "B2_HOLD_VALIDITY_REQUIRED"
     booking = database.rows["venue_booking"][0]
-    assert booking["status"] == "confirmed"
-    assert booking["decided_by"] == "STAFF-1"
-    assert booking["decided_at"]
+    assert booking["status"] == status
+    assert "decided_by" not in booking
 
 
 def test_staff_rejection_stores_reason_and_alternatives_as_text(client, database):
@@ -634,3 +640,119 @@ def test_venue_update_uses_live_schema_columns(client, database):
     assert venue["capacity"] == 120
     assert venue["supported_layouts"] == ["Banquet", "Classroom"]
     assert venue["accessibility"] == "Step-free access"
+
+
+def test_coordinator_only_complete_empty_reads_allow_availability_and_submission(client, database):
+    assert [row["role"] for row in database.rows["user_role"] if row["user_id"] == "COORD-1"] == ["event_coordinator"]
+    response = client.post("/api/venue-bookings/availability", headers=HEADERS,
+                           json={key: value for key, value in PAYLOAD.items() if key != "venue_id"})
+    assert response.status_code == 200
+    assert [venue["venue_id"] for venue in response.get_json()["venues"]] == ["VEN-001"]
+    assert response.get_json()["assessment_complete"] is True
+    assert response.get_json()["assessment_limitations"] == []
+    assert submit(client).status_code == 201
+    database.factory.assert_called_with("test-token")
+
+
+@pytest.mark.parametrize("role,allowed", [("venue_staff", True), ("event_coordinator", True), ("event_organiser", False), ("technical_support", False), ("attendee", False), (None, False)])
+def test_occupancy_read_authority_matches_own_documented_roles(database, role, allowed):
+    from app.services.venue_occupancy import caller_has_complete_venue_reads
+    # Another user's permitted role must not establish this caller's authority.
+    database.rows["user_role"] = [{"user_id": "OTHER", "role": "venue_staff"}]
+    if role is not None:
+        database.rows["user_role"].append({"user_id": "COORD-1", "role": role})
+    assert caller_has_complete_venue_reads(database, "COORD-1") is allowed
+
+
+@pytest.mark.parametrize("status", ["confirmed", "requested", "tentative"])
+def test_coordinator_only_conflict_or_hold_never_offered_as_free(client, database, status):
+    database.rows["venue_booking"].append(active_booking(status=status))
+    before = deepcopy(database.rows)
+    response = client.post("/api/venue-bookings/availability", headers=HEADERS,
+                           json={key: value for key, value in PAYLOAD.items() if key != "venue_id"})
+    result = response.get_json()
+    assert response.status_code == 200
+    assert result["venues"] == []
+    assert result["assessment_complete"] is (status == "confirmed")
+    if status == "confirmed":
+        assert result["assessment_limitations"] == []
+    else:
+        assert result["assessment_limitations"][0]["limitations"] == [{"booking_id": "existing", "reason": "hold_validity_unavailable"}]
+    blocked = submit(client)
+    assert blocked.status_code == 409
+    if status != "confirmed":
+        assert blocked.get_json()["code"] == "B2_HOLD_VALIDITY_REQUIRED"
+    assert database.rows == before
+
+
+@pytest.mark.parametrize("table,record", [
+    ("venue_booking", active_booking(status="confirmed", requested_start=None)),
+    ("venue_booking", active_booking(status=None)),
+    ("venue_block", {"venue_block_id": "block", "venue_id": "VEN-001", "status": "active", "start_datetime": START, "end_datetime": None}),
+])
+def test_coordinator_only_malformed_authoritative_occupancy_blocks_writes(client, database, table, record):
+    database.rows[table].append(deepcopy(record))
+    before = deepcopy(database.rows)
+    response = client.post("/api/venue-bookings/availability", headers=HEADERS,
+                           json={key: value for key, value in PAYLOAD.items() if key != "venue_id"})
+    assert response.status_code == 200
+    assert response.get_json()["venues"] == []
+    assert response.get_json()["assessment_complete"] is False
+    assert response.get_json()["assessment_limitations"][0]["blockers"]
+    blocked = submit(client)
+    assert blocked.status_code == 409
+    assert blocked.get_json()["code"] == "B1_AUTHORITATIVE_OCCUPANCY_UNASSESSABLE"
+    assert database.rows == before
+
+
+@pytest.mark.parametrize("table", ["venue_booking", "venue_block"])
+@pytest.mark.parametrize("count", [None, 1])
+def test_coordinator_only_incomplete_reads_never_allow_booking(client, database, monkeypatch, table, count):
+    original_execute = Query.execute
+
+    def incomplete_execute(query):
+        result = original_execute(query)
+        if query.table == table and query.operation == "select":
+            result.count = count  # Missing count or one omitted row in an empty response.
+        return result
+
+    monkeypatch.setattr(Query, "execute", incomplete_execute)
+    before = deepcopy(database.rows)
+    response = client.post("/api/venue-bookings/availability", headers=HEADERS,
+                           json={key: value for key, value in PAYLOAD.items() if key != "venue_id"})
+    assert response.status_code == 200
+    assert response.get_json()["venues"] == []
+    assert response.get_json()["assessment_complete"] is False
+    assert {"reason": "occupancy_read_truncated_or_unverified"} in response.get_json()["assessment_limitations"][0]["limitations"]
+    assert submit(client).status_code == 409
+    assert database.rows == before
+
+
+@pytest.mark.parametrize("start,end", [("09:00", "09:15"), ("13:00", "13:30")])
+def test_booking_check_uses_buffer_only_conflicts(database, start, end):
+    from app.services.venue_booking_service import execute_conflict_check
+    database.rows["venue"][0].update(setup_minutes=30, turnaround_minutes=45)
+    database.rows["venue_booking"].append(active_booking(status="confirmed", requested_start="2027-03-10T10:00:00+08:00", requested_end="2027-03-10T12:00:00+08:00"))
+    assert execute_conflict_check(database, "VEN-001", f"2027-03-10T{start}:00+08:00", f"2027-03-10T{end}:00+08:00", user_id="COORD-1")
+
+
+def test_bookings_without_configuration_never_assume_zero(client, database):
+    database.rows["venue"][0].update(setup_minutes=None, turnaround_minutes=None)
+    response = submit(client)
+    assert response.status_code == 409
+    assert response.get_json()["code"] == "B1_CONFIGURATION_REQUIRED"
+    assert database.rows["venue_booking"] == []
+
+
+def test_calendar_api_uses_shared_occupancy_and_keeps_potential_holds(database):
+    database.auth.get_user.return_value.user.id = "STAFF-1"
+    database.rows["venue"][0].update(setup_minutes=30, turnaround_minutes=45)
+    database.rows["venue_booking"].append(active_booking(status="tentative"))
+    with patch("app.services.venue_availability_service.create_authenticated_supabase_client", return_value=database):
+        response = app.test_client().get("/api/venue/availability?venue_id=VEN-001", headers=HEADERS)
+    assert response.status_code == 200
+    result = response.get_json()["availability"]
+    assert result["tentative_holds"][0]["status"] == "tentative"
+    assert result["tentative_holds"][0]["occupied_start"] == "2026-11-15T00:30:00+00:00"
+    assert result["assessment_complete"] is False
+    assert result["assessment_limitations"][0]["reason"] == "hold_validity_unavailable"
