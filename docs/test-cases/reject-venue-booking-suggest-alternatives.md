@@ -1,6 +1,6 @@
 # Test Cases — Reject Venue Booking Request and Suggest Alternative Venues
 
-**Review state:** DRAFT — Human Gate 2 approval required before implementation.
+**Review state:** APPROVED — Human Gate 2 confirmed on 2026-10-20; implementation-readiness and any required Human Gate 3 approval remain pending.
 
 ## Traceability Summary
 
@@ -82,4 +82,4 @@
 
 ## Human Gate 2
 
-**Awaiting developer approval of this functional test specification.** Do not implement routes, services, frontend changes, pytest tests, schema/RLS changes or merge this feature until the remaining workflow gates are cleared.
+**Human Gate 2 approved on 2026-10-20.** Do not implement routes, services, frontend changes, pytest tests, schema/RLS changes or merge this feature until the remaining workflow gates are cleared.
