@@ -1,8 +1,12 @@
 # ConnectSphere Shared Project Context
 
-This document contains the shared technical and functional context for ConnectSphere.
+This document records the current reconciled shared technical and functional
+project baseline for ConnectSphere. It is not the canonical customer-release
+history.
 
-Developers and AI coding agents should treat this file as the current project-level source of truth unless newer confirmed customer requirements or team decisions override it.
+Requirement precedence is owned by `docs/requirements/README.md`. A newer
+confirmed customer requirement may temporarily supersede content in this
+document until the shared baseline is formally reconciled.
 
 ---
 
@@ -296,6 +300,24 @@ rejected
 cancelled
 ```
 
+These are the only persisted values permitted by the live
+`venue_booking.status` CHECK constraint. User-interface wording such as
+`Pending Venue Approval` may represent `requested` or `tentative`, and
+`Approved` may represent `confirmed`; those labels are display text and must
+not be persisted as status values.
+
+### Venue Block
+
+```text
+active
+cancelled
+```
+
+These are the only persisted values permitted by the live
+`venue_block.status` CHECK constraint. Terms such as "blocked" or
+"unavailable" may describe an active block in the interface, but are not
+additional persisted status values.
+
 ### Event Change Request
 
 ```text
@@ -439,10 +461,17 @@ The current backend contains:
 POST /auth/login
 ```
 
-The existing login implementation currently remains in:
+The login route is registered by the canonical Flask application in
+`app/app.py`. Its route implementation lives in:
 
 ```text
-app/app.py
+app/routes/auth.py
+```
+
+and delegates authentication logic to:
+
+```text
+app/services/auth_service.py
 ```
 
 This is existing baseline functionality.
@@ -758,18 +787,13 @@ Environment-specific secrets belong only in local `.env` files or approved priva
 
 ## 22. Source of Truth
 
-If documents or prototype behaviour disagree, use this priority:
+Requirement precedence is defined in:
 
 ```text
-1. Confirmed customer requirements and clarifications
-2. Approved database schema and RLS design
-3. Relevant user story and acceptance criteria
-4. This shared project context
-5. Shared architecture documentation
-6. AGENTS.md development rules
-7. Approved frontend prototype
+docs/requirements/README.md
 ```
 
-Do not silently guess when an important requirement is unclear.
-
-Raise the ambiguity with the team before changing shared architecture or data design.
+Use this project-context document for shared project facts and decisions after
+requirements have been reconciled. If it conflicts with a newer confirmed
+customer requirement, follow the precedence defined in the requirements guide
+and flag this file for reconciliation.

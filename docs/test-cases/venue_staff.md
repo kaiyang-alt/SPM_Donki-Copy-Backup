@@ -5,9 +5,9 @@
 | Test Case | Category | Acceptance Criterion / Behaviour Covered |
 |---|---|---|
 | TC-001 | Happy Path | Venue Staff can view incoming booking requests for a venue |
-| TC-002 | Happy Path | Competing pending requests are displayed in chronological submission order |
-| TC-003 | Happy Path | Venue Staff can approve a pending booking request |
-| TC-004 | Happy Path | Venue Staff can reject a pending booking request |
+| TC-002 | Happy Path | Competing requests with pending display state (`requested` or `tentative` persisted status) are displayed in chronological submission order |
+| TC-003 | Happy Path | Venue Staff can approve a pending booking request, persisting `confirmed` |
+| TC-004 | Happy Path | Venue Staff can reject a pending booking request, persisting `rejected` |
 | TC-005 | Negative | Access is denied for users without the `venue_staff` role |
 | TC-006 | Cross-Cutting Quality | Approving a request warns about overlapping pending requests at the same venue, date and time |
 | TC-007 | Negative | Invalid status values are rejected without changing the request |
@@ -34,11 +34,11 @@
 |---|---|
 | **Test Case ID** | TC-002 |
 | **Category** | Happy Path |
-| **Test Scenario** | Verify that multiple pending booking requests for the same venue are presented in the order they were submitted. |
-| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- Two or more pending booking requests exist for the same venue.<br>- The requests have different `submitted_at` timestamps. |
+| **Test Scenario** | Verify that multiple booking requests shown as pending for the same venue are presented in the order they were submitted. |
+| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- Two or more booking requests with persisted status `requested` or `tentative` exist for the same venue.<br>- The requests have different `requested_at` timestamps. |
 | **Test Steps** | 1. Open the Venue Staff booking requests view.<br>2. Inspect the ordering of the displayed pending requests.<br>3. Compare the displayed order against each request's submission timestamp. |
-| **Test Data** | `Request A`: submitted at `2026-10-07T08:00:00Z`, status `pending`<br>`Request B`: submitted at `2026-10-07T09:30:00Z`, status `pending` |
-| **Expected Result** | - The earliest submitted request appears first.<br>- Later submissions appear in ascending `submitted_at` order.<br>- Ordering is consistent across repeated loads of the view. |
+| **Test Data** | `Request A`: submitted at `2026-10-07T08:00:00Z`, persisted status `requested`<br>`Request B`: submitted at `2026-10-07T09:30:00Z`, persisted status `requested` |
+| **Expected Result** | - The earliest submitted request appears first.<br>- Later submissions appear in ascending `requested_at` order.<br>- Ordering is consistent across repeated loads of the view. |
 
 ---
 
@@ -49,10 +49,10 @@
 | **Test Case ID** | TC-003 |
 | **Category** | Happy Path |
 | **Test Scenario** | Verify that a Venue Staff member can approve a pending booking request with no conflicting pending requests. |
-| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- A booking request exists for the venue with status `pending`.<br>- No other pending request exists for the same venue, date and overlapping time window. |
+| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- A booking request exists for the venue with persisted status `requested`.<br>- No other request with persisted status `requested` or `tentative` exists for the same venue, date and overlapping time window. |
 | **Test Steps** | 1. Open the booking request.<br>2. Select the approve action.<br>3. Confirm the approval.<br>4. Reopen the request and inspect its status. |
-| **Test Data** | `Request ID`: `REQ-1`<br>`Current Status`: `pending`<br>`Requested Status`: `approved` |
-| **Expected Result** | - The request status is updated to `approved`.<br>- The updated status persists when the request is reopened.<br>- No overlap warning is returned. |
+| **Test Data** | `Request ID`: `REQ-1`<br>`Current persisted status`: `requested`<br>`Action`: `Approve` |
+| **Expected Result** | - The request's persisted `venue_booking.status` is updated to `confirmed`.<br>- The interface may display `Approved` as a user-facing label.<br>- The updated persisted status remains `confirmed` when the request is reopened.<br>- No overlap warning is returned. |
 
 ---
 
@@ -63,10 +63,10 @@
 | **Test Case ID** | TC-004 |
 | **Category** | Happy Path |
 | **Test Scenario** | Verify that a Venue Staff member can reject a pending booking request. |
-| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- A booking request exists for the venue with status `pending`. |
+| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- A booking request exists for the venue with persisted status `requested`. |
 | **Test Steps** | 1. Open the booking request.<br>2. Select the reject action.<br>3. Confirm the rejection.<br>4. Reopen the request and inspect its status. |
-| **Test Data** | `Request ID`: `REQ-2`<br>`Current Status`: `pending`<br>`Requested Status`: `rejected` |
-| **Expected Result** | - The request status is updated to `rejected`.<br>- The updated status persists when the request is reopened.<br>- No overlap warning is returned. |
+| **Test Data** | `Request ID`: `REQ-2`<br>`Current persisted status`: `requested`<br>`Action`: `Reject` |
+| **Expected Result** | - The request's persisted `venue_booking.status` is updated to `rejected`.<br>- The interface may display `Rejected` as a user-facing label.<br>- The updated persisted status remains `rejected` when the request is reopened.<br>- No overlap warning is returned. |
 
 ---
 
@@ -79,7 +79,7 @@
 | **Test Scenario** | Verify that an authenticated user without the `venue_staff` role cannot view or update booking requests. |
 | **Pre-conditions** | - A registered Supabase Auth account exists for `organiser.alpha@example.test`.<br>- The account has the `event_organiser` role in `user_role` and does not have the `venue_staff` role.<br>- At least one booking request exists for the venue. |
 | **Test Steps** | 1. Log in as `organiser.alpha@example.test`.<br>2. Attempt to open the Venue Staff booking requests view.<br>3. Attempt to submit an approval or rejection against an existing request. |
-| **Test Data** | `Authenticated User`: `organiser.alpha@example.test`<br>`Target Request ID`: `REQ-1`<br>`Attempted Status`: `approved` |
+| **Test Data** | `Authenticated User`: `organiser.alpha@example.test`<br>`Target Request ID`: `REQ-1`<br>`Attempted action`: `Approve` (which would persist `confirmed`) |
 | **Expected Result** | - Access to the booking requests view is denied.<br>- No booking request details are disclosed.<br>- The approval or rejection attempt is rejected.<br>- The target request remains unchanged. |
 
 ---
@@ -91,10 +91,10 @@
 | **Test Case ID** | TC-006 |
 | **Category** | Cross-Cutting Quality |
 | **Test Scenario** | Verify that approving a request surfaces a warning when another pending request for the same venue overlaps the approved time window. |
-| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- Two pending booking requests exist for the same venue and requested date.<br>- Their start and end times overlap.<br>- The request being approved is `pending`. |
+| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- Two booking requests with persisted status `requested` exist for the same venue and requested date.<br>- Their start and end times overlap.<br>- The request being approved is displayed as pending. |
 | **Test Steps** | 1. Open `REQ-1`.<br>2. Approve `REQ-1`.<br>3. Inspect the response for an overlap warning.<br>4. Reopen `REQ-2` and confirm its status is unchanged. |
-| **Test Data** | `REQ-1`: `2026-11-20`, `09:00`–`12:00`, status `pending`<br>`REQ-2`: `2026-11-20`, `11:00`–`14:00`, status `pending`<br>`Requested Status on REQ-1`: `approved` |
-| **Expected Result** | - `REQ-1` is updated to `approved`.<br>- The response includes an overlap warning identifying `REQ-2` as the conflicting pending request.<br>- `REQ-2` remains in `pending` status. |
+| **Test Data** | `REQ-1`: `2026-11-20`, `09:00`–`12:00`, persisted status `requested`<br>`REQ-2`: `2026-11-20`, `11:00`–`14:00`, persisted status `requested`<br>`Action on REQ-1`: `Approve` |
+| **Expected Result** | - `REQ-1` is persisted with status `confirmed` and may display as `Approved`.<br>- The response includes an overlap warning identifying `REQ-2` as the conflicting pending request.<br>- `REQ-2` remains persisted with status `requested`. |
 
 ---
 
@@ -105,7 +105,7 @@
 | **Test Case ID** | TC-007 |
 | **Category** | Negative |
 | **Test Scenario** | Verify that a status update with an unrecognised value is rejected without modifying the request. |
-| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- A booking request exists for the venue with status `pending`. |
-| **Test Steps** | 1. Open `REQ-1`.<br>2. Attempt to update its status to a value other than `approved` or `rejected`.<br>3. Inspect the response.<br>4. Reopen the request and confirm its status is unchanged. |
-| **Test Data** | `Request ID`: `REQ-1`<br>`Current Status`: `pending`<br>`Attempted Status`: `maybe` |
-| **Expected Result** | - The update is rejected with a validation error.<br>- The request status remains `pending`.<br>- No partial update is applied. |
+| **Pre-conditions** | - `venue.staff@example.test` is authenticated with the `venue_staff` role.<br>- A booking request exists for the venue with persisted status `requested`. |
+| **Test Steps** | 1. Open `REQ-1`.<br>2. Attempt to persist a status outside `requested`, `tentative`, `confirmed`, `rejected`, or `cancelled`.<br>3. Inspect the response.<br>4. Reopen the request and confirm its status is unchanged. |
+| **Test Data** | `Request ID`: `REQ-1`<br>`Current persisted status`: `requested`<br>`Attempted persisted status`: `maybe` |
+| **Expected Result** | - The update is rejected with a validation error.<br>- The request's persisted status remains `requested`.<br>- No partial update is applied. |

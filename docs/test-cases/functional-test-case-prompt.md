@@ -2,9 +2,17 @@
 
 You are a software test designer supporting the ConnectSphere project.
 
-Your task is to derive a concise but thorough set of **FUNCTIONAL TEST CASES** for the supplied user story.
+Your task is to derive a concise but thorough set of **FUNCTIONAL TEST CASES**
+for the approved canonical user story.
 
-The test cases will be stored in the relevant user-story Markdown file and reviewed in version control.
+Functional test specifications are stored in:
+
+```text
+docs/test-cases/<story-name>.md
+```
+
+The corresponding user-story file references this specification; it does not
+contain the full functional test body.
 
 The output must therefore be:
 
@@ -34,9 +42,33 @@ Do NOT:
 - implement the user story
 - redesign the frontend
 
-Return only the completed Markdown functional test specification.
-
 Automated test implementation, where required, happens later during user-story implementation.
+
+## Orchestrated Mode
+
+This prompt is normally invoked by:
+
+```text
+docs/implementation/user-story-implementation-prompt.md
+```
+
+after Human Gate 1 has approved the canonical story and Acceptance Criteria.
+In orchestrated mode:
+
+1. Read the approved canonical story.
+2. Inspect the existing canonical functional-test file, if present.
+3. Create or update `docs/test-cases/<story-name>.md`.
+4. Do not implement runtime code or create pytest code.
+5. Report the required change summary and return control to the orchestrator
+   for Human Gate 2.
+
+## Standalone Mode
+
+This prompt may also be used independently after the story and Acceptance
+Criteria are approved. If repository editing is available, create or update
+`docs/test-cases/<story-name>.md`. If editing is unavailable, return the complete
+Markdown specification for that file. Never direct the developer to paste the
+functional test body into the user-story file.
 
 ---
 
@@ -47,8 +79,10 @@ The following ConnectSphere context may be supplied together with this prompt:
 ```text
 README.md
 AGENTS.md
+docs/requirements/README.md
 docs/architecture/project_context.md
 docs/user-stories/<relevant-story>.md
+docs/test-cases/<relevant-story>.md, if it exists
 Relevant UML, if applicable
 ```
 
@@ -75,11 +109,23 @@ They must **not** be used to expand the functional scope of the supplied user st
 
 `AGENTS.md` contains shared implementation and project-development rules.
 
-Use it to avoid proposing tests based on prohibited or unsupported architectural changes.
+Use it for implementation and repository guardrails. Do not propose unapproved
+architectural changes in a functional test specification, but record any known
+technical limitation as an Implementation Dependency rather than narrowing the
+approved functional scope.
 
 ## Story-Specific Scope
 
-The following define the actual functional scope being tested:
+Follow the canonical requirement precedence in
+`docs/requirements/README.md`; do not create another hierarchy here. After
+reconciliation and Human Gate 1, the approved canonical User Story and
+Acceptance Criteria are the immediate functional test scope.
+
+Relevant Customer Clarifications recorded for that approved story may explain
+the scope. Do not derive new requirements from prototype behaviour, current
+implementation, database limitations or passing tests.
+
+The approved story defines the actual functional scope being tested through:
 
 1. User Story
 2. Acceptance Criteria
@@ -146,6 +192,27 @@ Do not treat a dependency as additional feature scope.
 - Do not add tests only because they are considered general software-testing best practice.
 
 - Every test must have a clear requirement basis.
+
+## Existing Test Reconciliation
+
+When a canonical functional test specification already exists:
+
+```text
+UNCHANGED approved behaviour
+-> preserve valid test cases
+
+CHANGED behaviour
+-> update affected test cases
+
+REMOVED / SUPERSEDED behaviour
+-> remove obsolete functional tests
+
+NEW behaviour
+-> add tests where required
+```
+
+Preserve stable Test Case IDs where practical. Do not retain obsolete tests
+merely because they already exist or previously passed.
 
 ---
 
@@ -383,7 +450,8 @@ Then:
 
 # 10. TEST CASE ID RULES
 
-Test Case IDs must be sequential and stable within the user-story document.
+Test Case IDs must be sequential and stable within the functional test
+specification.
 
 For a new user story with no existing tests:
 
@@ -594,22 +662,40 @@ Those may belong to automated implementation testing later.
 
 # 16. DATABASE AND RLS RULE
 
-The ConnectSphere project already has an approved database schema and RLS design.
+Functional tests describe approved required behaviour. The current database or
+RLS design must not weaken an approved expected result.
 
-Do not create functional tests that assume:
+If an approved Acceptance Criterion may require behaviour that the current
+documented database or RLS does not support:
 
-- a new database table
-- a new column
-- a new relationship
-- a new status
-- disabled RLS
-- a service-role bypass
+- continue to test the approved behaviour;
+- flag an **Implementation Dependency**;
+- do not weaken the expected result;
+- do not design the schema or RLS policy here;
+- do not invent tables, columns, relationships, statuses or permissions; and
+- do not treat the technical dependency as a customer-requirement ambiguity.
 
-unless the supplied story explicitly requires an approved change.
+Do not silently redesign or bypass the data model through a test case.
 
-If the story cannot be reliably implemented/tested using the existing project context, raise the issue under Open Questions.
+## Implementation Dependencies
 
-Do not silently redesign the data model through a test case.
+Include this optional section only for confirmed technical dependencies, such
+as:
+
+- approved behaviour requires persistence not represented in the current
+  documented schema; or
+- an approved role requires RLS support not currently represented.
+
+Format:
+
+```text
+## Implementation Dependencies
+
+- <approved behaviour and the confirmed technical dependency>
+```
+
+Implementation Dependencies are assessed in detail by the orchestrator after
+Human Gate 2. They are distinct from Open Questions.
 
 ---
 
@@ -622,6 +708,9 @@ Include an:
 ```
 
 section ONLY when the supplied requirements contain a meaningful ambiguity or missing decision that prevents a reliable test from being defined.
+
+Open Questions are requirement ambiguities only. Do not place known technical,
+schema or RLS dependencies in this section.
 
 Format:
 
@@ -734,6 +823,7 @@ Before finalising, verify:
 - Related Acceptance Criteria are grouped where appropriate.
 - Test cases are not repetitive.
 - Ambiguities are placed under Open Questions.
+- Confirmed technical dependencies are placed under Implementation Dependencies.
 - Existing Test Case IDs have been preserved where applicable.
 - New Test Case IDs are sequential.
 - The output follows the required Markdown structure.
@@ -741,21 +831,25 @@ Before finalising, verify:
 
 ---
 
-# 21. OUTPUT REQUIREMENT
+# 21. OUTPUT REQUIREMENT AND HUMAN GATE
 
-Return ONLY the completed Markdown functional test specification.
+The canonical output is `docs/test-cases/<story-name>.md`.
 
-Do not include:
+In standalone mode without repository editing, return the complete Markdown
+specification for that file without pytest or implementation code.
 
-- introductory explanation
-- reasoning commentary
-- implementation advice
-- pytest code
-- source code
-- postscript
-- general recommendations
+In orchestrated mode, after creating or updating the file, report a concise
+summary of:
 
-The output should be ready to paste directly into the relevant ConnectSphere user-story Markdown document.
+- tests added
+- tests updated
+- tests removed
+- Acceptance Criterion coverage
+- Implementation Dependencies
+- Open Questions
+
+Then stop and return control to the primary workflow for Human Gate 2. Do not
+continue to implementation.
 
 ---
 
