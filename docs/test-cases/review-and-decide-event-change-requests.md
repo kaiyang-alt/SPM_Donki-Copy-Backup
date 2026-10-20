@@ -1,6 +1,6 @@
 # Test Cases — Review and Decide Event Change Requests
 
-**Review state:** DRAFT — awaiting Human Gate 2 approval.  
+**Review state:** APPROVED — Human Gate 2, 2026-10-20. Implementation-readiness and any required shared-change approval remain pending.  
 **Human Gate 1:** Approved by the assigned developer on 2026-10-20.  
 **Approved working interpretation:** Option B — successful approval immediately applies requested event changes; it does not bypass Venue Staff or Technical Support authority.
 
@@ -165,4 +165,4 @@ These are shared implementation dependencies, not grounds to weaken the expected
 
 ## Human Gate 2
 
-Awaiting explicit developer approval of these functional test cases. Do not change runtime code, pytest tests, shared schema/RLS, or create a release PR on the basis of this unapproved draft.
+Developer approved these nine functional cases in the 2026-10-20 follow-up. Human Gate 2 is cleared. Do not change runtime code, pytest tests or shared schema/RLS, or create a release PR, until implementation-readiness is complete and any required shared-change approval is obtained.
