@@ -22,6 +22,10 @@ REQUIRED_FILES = (
     "scripts/validate_structure.py",
 )
 
+FORBIDDEN_PATHS = (
+    "app1",
+)
+
 REQUIRED_DIRECTORIES = (
     ".github",
     ".github/workflows",
@@ -51,18 +55,24 @@ def main() -> int:
         for path in REQUIRED_DIRECTORIES
         if not (REPOSITORY_ROOT / path).is_dir()
     ]
+    forbidden_paths_present = [
+        path for path in FORBIDDEN_PATHS if (REPOSITORY_ROOT / path).exists()
+    ]
 
-    if missing_files or missing_directories:
+    if missing_files or missing_directories or forbidden_paths_present:
         for path in missing_files:
             print(f"FAIL | Missing required file: {path}")
         for path in missing_directories:
             print(f"FAIL | Missing required directory: {path}/")
+        for path in forbidden_paths_present:
+            print(f"FAIL | Retired duplicate path must not exist: {path}")
         print("FAIL | Repository structure validation")
         return 1
 
     print(
         "PASS | Repository structure validation "
-        f"({len(REQUIRED_FILES)} files, {len(REQUIRED_DIRECTORIES)} directories)"
+        f"({len(REQUIRED_FILES)} files, {len(REQUIRED_DIRECTORIES)} directories, "
+        f"{len(FORBIDDEN_PATHS)} retired path checks)"
     )
     return 0
 
