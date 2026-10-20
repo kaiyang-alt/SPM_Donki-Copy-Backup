@@ -1,6 +1,6 @@
 # Review and Decide Event Change Requests
 
-**Status:** PROPOSED — awaiting Human Gate 1 approval  
+**Status:** APPROVED — Human Gate 1, 2026-10-20  
 **Story owner:** Ai Wei  
 **Interpretation updated:** 2026-10-20 — the developer selected Option B: approval immediately applies approved proposed changes. This is the working story interpretation, not an independently verified customer clarification.
 
@@ -118,9 +118,10 @@ These are implementation dependencies. They do not weaken the approved business 
 
 ## Test Case Reference
 
-`docs/test-cases/review-and-decide-event-change-requests.md` — not created until Human Gate 1 approval.
+`docs/test-cases/review-and-decide-event-change-requests.md` — Phase 2 draft, awaiting Human Gate 2 approval.
 
 ## Requirement Revision
 
 - 2026-10-20: New separately assigned Event Coordinator change-request decision story.
-- 2026-10-20: Developer selected Option B; added AC11 to require immediate application on successful approval. Awaiting approval of this complete story and acceptance criteria.
+- 2026-10-20: Developer selected Option B; added AC11 to require immediate application on successful approval.
+- 2026-10-20: Developer confirmed the complete story and acceptance criteria at Human Gate 1; functional test specification can be drafted for Human Gate 2.
