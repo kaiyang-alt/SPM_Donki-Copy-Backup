@@ -74,4 +74,4 @@ As Venue Staff, I want to reject an unsuitable booking request and suggest an al
 
 ## Requirement Revision
 
-2026-10-20: New separately assigned story approved at Human Gate 1. This focused capability overlaps the broader Venue Staff booking-review workflow in `venue-staff.md` but does not replace that story. The functional test specification remains subject to Human Gate 2 approval.
+2026-10-20: New separately assigned story approved at Human Gate 1. This focused capability overlaps the broader Venue Staff booking-review workflow in `venue-staff.md` but does not replace that story. Human Gate 2 functional tests approved on 2026-10-20; implementation-readiness audit and any required shared-change approval remain pending.
