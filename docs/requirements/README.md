@@ -48,16 +48,17 @@ and any required shared-architecture change.
 
 ```text
 New or updated customer requirement
--> identify affected existing stories
--> identify genuinely new stories
--> agent reconciles or creates the canonical story file
--> human approves the story and acceptance criteria
--> agent generates or updates the functional test specification
+-> identify the blast radius across existing and genuinely new stories
+-> confirm or assign an owner for each affected story/capability
+-> hand affected stories to their owners; do not edit them from another story
+-> for the currently assigned story only, reconcile or create its canonical file
+-> human approves that story and its acceptance criteria
+-> generate or update that story's functional test specification
 -> human approves the tests
--> implementation-readiness audit
+-> implementation-readiness audit for that assigned story
 -> flag shared database, RLS or architecture dependencies where required
--> team approval
--> implementation, testing and Pull Request
+-> team approval for shared changes, when needed
+-> implementation, testing and Pull Request for the assigned story
 ```
 
 ## Existing vs New Stories
@@ -83,6 +84,11 @@ design change.
 
 - The story owner owns reconciliation, implementation and testing for their
   story.
-- Cross-story impacts must be flagged.
-- Do not silently take over another developer's story.
-- Shared architecture decisions require team agreement.
+- Cross-story impacts must be flagged and handed off to the affected story
+  owner.
+- Blast-radius analysis does not transfer ownership. Finding that another story
+  is affected is not permission to rewrite, specify or implement it.
+- Do not silently take over another developer's story or recursively start its
+  workflow from the current story.
+- Shared architecture decisions require team agreement. A shared dependency may
+  be implemented only when it is explicitly approved as shared work.
