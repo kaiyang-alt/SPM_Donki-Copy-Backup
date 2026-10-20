@@ -118,10 +118,11 @@ These are implementation dependencies. They do not weaken the approved business 
 
 ## Test Case Reference
 
-`docs/test-cases/review-and-decide-event-change-requests.md` — Phase 2 draft, awaiting Human Gate 2 approval.
+`docs/test-cases/review-and-decide-event-change-requests.md` — Human Gate 2 approved; proceed to implementation-readiness audit.
 
 ## Requirement Revision
 
 - 2026-10-20: New separately assigned Event Coordinator change-request decision story.
 - 2026-10-20: Developer selected Option B; added AC11 to require immediate application on successful approval.
-- 2026-10-20: Developer confirmed the complete story and acceptance criteria at Human Gate 1; functional test specification can be drafted for Human Gate 2.
+- 2026-10-20: Developer confirmed the complete story and acceptance criteria at Human Gate 1.
+- 2026-10-20: Developer approved the nine functional scenarios in the ensuing confirmation; Human Gate 2 cleared. Awaiting implementation-readiness and any required shared-change approval.
