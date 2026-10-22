@@ -392,6 +392,17 @@ New code should use existing database-supported values instead of inventing new 
 - Coordinator and Technical Support determine required equipment.
 - If no equipment is required, the equipment requirement may be considered complete.
 - Equipment availability must consider unavailable and already committed quantities.
+- The organiser's submitted technical requirements are the source for Technical
+  Support review after Coordinator approval moves the event into planning,
+  including before a separate equipment row exists. Technical
+  Support proposes a positive quantity; the organiser agrees to that version
+  before Technical Support makes the final reservation. Preserve original
+  requirements and any structured requested quantity.
+- Same-venue equipment reuse may be immediate. Reusing units at a different
+  venue requires a 30-minute transfer gap, compared by venue UUID. Final
+  acceptance checks both venue and equipment availability atomically.
+- The local proposal implementation and its pending Supabase deployment are
+  documented in [Reserve Equipment](../user-stories/reserve-equipment.md).
 
 ---
 

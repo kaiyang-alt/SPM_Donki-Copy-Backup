@@ -169,12 +169,50 @@
 | `start_datetime` | `timestamptz` |  Nullable |
 | `end_datetime` | `timestamptz` |  Nullable |
 | `technical_requirements` | `text` |  Nullable |
-| `status` | `text` |  Nullable |
+| `status` | `text` |  Nullable; CHECK permits `requested`, `reserved`, `rejected`, `cancelled` |
 | `requested_by` | `uuid` |  |
 | `requested_at` | `timestamptz` |  Nullable |
 | `decided_by` | `uuid` |  Nullable |
 | `decided_at` | `timestamptz` |  Nullable |
 | `decision_reason` | `text` |  Nullable |
+
+### Equipment proposal deployment — pending live verification
+
+The [proposal migration](../database/equipment-proposals-migration.sql) adds the
+following columns to `equipment_reservation`. They are implemented and tested
+locally, not confirmed deployed to the shared Supabase database.
+
+| Name | Type | Purpose |
+|------|------|---------|
+| `quantity_suggested` | `integer`, nullable, positive when set | Staff offer; reserved stock uses this quantity, falling back to original quantity for legacy rows |
+| `suggested_by` | `uuid`, nullable, FK `profile.user_id` | Proposing staff |
+| `suggested_at` | `timestamptz`, nullable | Proposal audit time |
+| `proposal_version` | `bigint NOT NULL DEFAULT 0` | Increments for an offer revision |
+| `organiser_agreed_version` | `bigint`, nullable | Must match current positive proposal version |
+| `organiser_agreed_by` | `uuid`, nullable, FK `profile.user_id` | Event owner giving consent |
+| `organiser_agreed_at` | `timestamptz`, nullable | Consent audit time |
+
+Agreement fields must be all absent or complete/current. Revisions clear them.
+Existing `quantity_requested` and original event requirements are preserved;
+free text is not parsed into a numeric request. No new status or table is added.
+
+RPCs: `propose_equipment_quantity`, `agree_equipment_proposal`, existing
+`accept_equipment_request`, and `cs_equipment_request_available`. RPC calls use
+the caller's authenticated role. Narrow read-only schedule validation and the
+arrangement-change guard use trusted-owner functions to check hidden venue
+commitments without returning other users' booking details; RLS still controls
+the originating writes. The allocator is private. Venue/event writes join the
+existing equipment advisory-lock protocol.
+
+The migration adds Technical Support event SELECT for equipment-related events
+in `planning` or `confirmed` after Coordinator approval, independent of
+reservation existence. Organisers may read their own offers and update only
+guarded agreement fields. Catalogue SELECT is limited to offered items. Existing
+Technical Support catalogue/request policies remain dependencies.
+
+For inbox visibility alone, the separate
+[inbox SELECT patch](../database/equipment-organiser-inbox-access.sql) updates
+only that event SELECT policy and adds no columns or write permissions.
 
 ## Table `registration`
 
