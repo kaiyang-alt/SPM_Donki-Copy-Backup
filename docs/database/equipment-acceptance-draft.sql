@@ -1,7 +1,9 @@
 -- REVIEW DRAFT. Not applied to Supabase and not verified against live RLS.
+-- Pending equipment status aligned to requested by user decision, 22 October 2026.
+-- This stock-only baseline does not enforce venue availability or transfer gaps.
 -- Assumptions requiring team agreement:
 -- active unavailability consumes stock; cancelled does not; NULL is an error.
--- Earlier feasible planning requests have priority, with provisional allocation
+-- Earlier feasible equipment requests in requested status have priority, with provisional allocation
 -- used only for checking priority (their stored status is not changed).
 -- Equal/missing request timestamps require manual clarification, not a guessed tie-break.
 -- All Technical Support callers must see ALL reservations/unavailability for a pool
@@ -117,10 +119,10 @@ BEGIN
   END IF;
   IF NEW.status IS DISTINCT FROM 'reserved' THEN RETURN NEW; END IF;
   IF TG_OP = 'INSERT' THEN
-    RAISE EXCEPTION 'Accept an existing planning request instead of inserting reserved stock';
+    RAISE EXCEPTION 'Accept an existing requested request instead of inserting reserved stock';
   END IF;
-  IF OLD.status IS DISTINCT FROM 'planning' THEN
-    RAISE EXCEPTION 'Only planning equipment requests can be accepted';
+  IF OLD.status IS DISTINCT FROM 'requested' THEN
+    RAISE EXCEPTION 'Only requested equipment requests can be accepted';
   END IF;
   IF auth.uid() IS NULL OR NOT EXISTS (
     SELECT 1 FROM public.user_role
@@ -147,11 +149,11 @@ BEGIN
   -- Reject ambiguous timestamp ordering for this equipment pool.
   IF EXISTS (
     SELECT 1 FROM public.equipment_reservation
-    WHERE equipment_id = NEW.equipment_id AND status = 'planning'
+    WHERE equipment_id = NEW.equipment_id AND status = 'requested'
       AND requested_at IS NULL
   ) OR EXISTS (
     SELECT 1 FROM public.equipment_reservation
-    WHERE equipment_id = NEW.equipment_id AND status = 'planning'
+    WHERE equipment_id = NEW.equipment_id AND status = 'requested'
       AND requested_at <= NEW.requested_at
     GROUP BY requested_at HAVING count(*) > 1
   ) THEN
@@ -160,7 +162,7 @@ BEGIN
 
   FOR v_earlier IN
     SELECT * FROM public.equipment_reservation
-    WHERE equipment_id = NEW.equipment_id AND status = 'planning'
+    WHERE equipment_id = NEW.equipment_id AND status = 'requested'
       AND requested_at < NEW.requested_at
     ORDER BY requested_at
   LOOP
@@ -258,11 +260,11 @@ BEGIN
     WHERE reservation_id = p_reservation_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Equipment request not found or inaccessible'; END IF;
   IF v_request.status = 'reserved' THEN RETURN v_request; END IF; -- retry after success
-  IF v_request.status IS DISTINCT FROM 'planning' THEN
-    RAISE EXCEPTION 'Only planning equipment requests can be accepted';
+  IF v_request.status IS DISTINCT FROM 'requested' THEN
+    RAISE EXCEPTION 'Only requested equipment requests can be accepted';
   END IF;
   UPDATE public.equipment_reservation SET status = 'reserved'
-    WHERE reservation_id = p_reservation_id AND status = 'planning'
+    WHERE reservation_id = p_reservation_id AND status = 'requested'
     RETURNING * INTO v_request;
   IF NOT FOUND THEN RAISE EXCEPTION 'Request cannot be updated under the current RLS policies'; END IF;
   RETURN v_request;
