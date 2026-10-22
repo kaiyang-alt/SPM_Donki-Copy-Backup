@@ -1,7 +1,6 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
 
 # Virtual environments
 venv/
@@ -23,8 +22,4 @@ Thumbs.db
 htmlcov/
 
 # Logs
-*.logapp1/venv/ 
-.venv/ 
-__pycache__/ 
-.pytest_cache/ 
-.env 
+*.log

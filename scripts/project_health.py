@@ -114,6 +114,15 @@ def main() -> int:
     docs_passed = docs_result.returncode == 0
     print(f"{'PASS' if docs_passed else 'FAIL'} | Documentation validation")
 
+    print("INFO | Running: python scripts/validate_structure.py", flush=True)
+    structure_result = run_command(
+        [sys.executable, "scripts/validate_structure.py"]
+    )
+    structure_passed = structure_result.returncode == 0
+    print(
+        f"{'PASS' if structure_passed else 'FAIL'} | Repository structure validation"
+    )
+
     print("INFO | Running: git diff --check HEAD", flush=True)
     diff_result = run_command(["git", "diff", "--check", "HEAD"])
     diff_passed = diff_result.returncode == 0
@@ -123,6 +132,7 @@ def main() -> int:
         "Production Flask app import": app_import_passed,
         "Full regression suite": pytest_passed,
         "Documentation validation": docs_passed,
+        "Repository structure validation": structure_passed,
         "git diff --check HEAD": diff_passed,
     }
 

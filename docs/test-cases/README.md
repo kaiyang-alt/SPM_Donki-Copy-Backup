@@ -8,6 +8,21 @@ These files are separate from the automated Python tests stored under:
 tests/
 ```
 
+The documentation responsibilities are:
+
+```text
+docs/user-stories/<story-name>.md
+-> User Story, Acceptance Criteria and requirement scope
+
+docs/test-cases/<story-name>.md
+-> human-readable functional test scenarios and AC traceability
+
+tests/
+-> automated pytest implementation tests
+```
+
+Functional test bodies must not be duplicated inside the user-story file.
+
 ## Folder Purpose
 
 Use this folder for:
@@ -41,27 +56,32 @@ docs/test-cases/event-change-request.md
 docs/uml/event-change-request-sequence.md
 ```
 
-## Shared Test-Case Prompt
+## Primary AI-Assisted Workflow
 
-Use:
+The normal entry point is:
+
+```text
+docs/implementation/user-story-implementation-prompt.md
+```
+
+The developer supplies the assigned story or new feature area and the latest
+customer material where relevant. The orchestrator handles reconciliation or
+story creation, Human Gate 1, functional-test generation, Human Gate 2,
+implementation readiness, Human Gate 3 where required, and implementation,
+testing and verification.
+
+The specialised functional-test prompt remains available at:
 
 ```text
 docs/test-cases/functional-test-case-prompt.md
 ```
 
-to generate or review functional test cases consistently.
+It is normally invoked by the orchestrator after the canonical story and
+Acceptance Criteria pass Human Gate 1, but it may also be used independently as
+a focused functional-test design tool.
 
-Before using the prompt, provide the AI with:
-
-```text
-README.md
-AGENTS.md
-docs/architecture/project_context.md
-docs/user-stories/<relevant-story>.md
-docs/test-cases/functional-test-case-prompt.md
-```
-
-The generated test specification should then be reviewed by a human before being treated as approved.
+Human review and approval are required before an AI-generated functional test
+specification becomes approved implementation input.
 
 ## Relationship to Automated Tests
 
@@ -92,3 +112,16 @@ Example:
 Functional test cases should remain within the scope of the relevant user story.
 
 Do not use test design to introduce new requirements, database structures, status values, workflows or permissions.
+
+## Canonical File Rule
+
+```text
+EXISTING TEST SPECIFICATION
+-> update the canonical file in place
+
+NEW STORY
+-> create the corresponding new functional test specification
+```
+
+Git history preserves previous versions. Do not create competing versioned
+copies unless explicitly approved.

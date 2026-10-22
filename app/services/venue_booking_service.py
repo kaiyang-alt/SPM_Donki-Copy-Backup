@@ -317,6 +317,7 @@ def get_all_booking_requests(access_token):
     bookings = (
         supabase.table("venue_booking")
         .select("*, venue(*), event(*)")
+        .order("requested_at", desc=False)
         .execute()
         .data
         or []
@@ -443,6 +444,19 @@ def block_venue_availability(
     if reason is not None and not isinstance(reason, str):
         raise VenueBookingError("reason must be a string.")
     supabase, user_id = authenticated_venue_client(access_token, "venue_staff")
+    confirmed_overlap = (
+        supabase.table("venue_booking")
+        .select("booking_id")
+        .eq("venue_id", venue_id)
+        .eq("status", "confirmed")
+        .lt("requested_start", requested_end)
+        .gt("requested_end", requested_start)
+        .execute()
+    )
+    if confirmed_overlap.data:
+        raise VenueBookingError(
+            "Cannot block a venue slot that overlaps a confirmed booking.", 409
+        )
     payload = {
         "venue_id": venue_id,
         "start_datetime": requested_start,
@@ -450,6 +464,7 @@ def block_venue_availability(
         "reason": (reason.strip() or None) if isinstance(reason, str) else None,
         "created_by": user_id,
         "created_at": datetime.now(UTC).isoformat(),
+        "status": "active",
     }
     response = supabase.table("venue_block").insert(payload).execute()
     if not response.data:

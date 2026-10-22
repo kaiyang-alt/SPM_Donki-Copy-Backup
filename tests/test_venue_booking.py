@@ -20,6 +20,34 @@ PAYLOAD = {
 START = "2026-11-15T09:00:00+08:00"
 END = "2026-11-15T12:00:00+08:00"
 
+VENUE_BOOKING_COLUMNS = {
+    "booking_id",
+    "venue_id",
+    "event_id",
+    "requested_start",
+    "requested_end",
+    "status",
+    "requested_by",
+    "requested_at",
+    "decided_by",
+    "decided_at",
+    "decision_reason",
+}
+VENUE_BLOCK_COLUMNS = {
+    "venue_block_id",
+    "venue_id",
+    "start_datetime",
+    "end_datetime",
+    "reason",
+    "created_by",
+    "created_at",
+    "status",
+}
+LIVE_TABLE_COLUMNS = {
+    "venue_booking": VENUE_BOOKING_COLUMNS,
+    "venue_block": VENUE_BLOCK_COLUMNS,
+}
+
 
 class Query:
     """Small in-memory Supabase query model using the checked-in live schema."""
@@ -28,36 +56,74 @@ class Query:
         self.database, self.table = database, table
         self.filters = []
         self.operation, self.payload = "select", None
+        self.ordering = None
+
+    def _validate_column(self, column):
+        allowed = LIVE_TABLE_COLUMNS.get(self.table)
+        if allowed is not None and column not in allowed:
+            raise AssertionError(f"{self.table}.{column} is not in the live schema")
 
     def select(self, columns):
+        allowed = LIVE_TABLE_COLUMNS.get(self.table)
+        if allowed is not None:
+            for column in (part.strip() for part in columns.split(",")):
+                if column != "*" and "(" not in column:
+                    self._validate_column(column)
         self.database.calls.append((self.table, "select", columns))
         return self
 
     def eq(self, column, value):
+        self._validate_column(column)
         self.filters.append(lambda row: row.get(column) == value)
         return self
 
     def neq(self, column, value):
+        self._validate_column(column)
         self.filters.append(lambda row: row.get(column) != value)
         return self
 
     def in_(self, column, values):
+        self._validate_column(column)
         self.filters.append(lambda row: row.get(column) in values)
         return self
 
     def lt(self, column, value):
+        self._validate_column(column)
         self.filters.append(lambda row: row[column] < value)
         return self
 
     def gt(self, column, value):
+        self._validate_column(column)
         self.filters.append(lambda row: row[column] > value)
         return self
 
+    def order(self, column, desc=False):
+        self._validate_column(column)
+        self.ordering = (column, desc)
+        self.database.calls.append((self.table, "order", self.ordering))
+        return self
+
     def insert(self, payload):
+        allowed = LIVE_TABLE_COLUMNS.get(self.table)
+        payloads = payload if isinstance(payload, list) else [payload]
+        if allowed is not None:
+            for row in payloads:
+                unknown = set(row) - allowed
+                if unknown:
+                    raise AssertionError(
+                        f"{self.table} insert uses non-live columns: {sorted(unknown)}"
+                    )
         self.operation, self.payload = "insert", deepcopy(payload)
         return self
 
     def update(self, payload):
+        allowed = LIVE_TABLE_COLUMNS.get(self.table)
+        if allowed is not None:
+            unknown = set(payload) - allowed
+            if unknown:
+                raise AssertionError(
+                    f"{self.table} update uses non-live columns: {sorted(unknown)}"
+                )
         self.operation, self.payload = "update", deepcopy(payload)
         return self
 
@@ -79,6 +145,9 @@ class Query:
             rows.extend(new_rows)
             return SimpleNamespace(data=deepcopy(new_rows))
         selected = [row for row in rows if all(check(row) for check in self.filters)]
+        if self.ordering:
+            column, desc = self.ordering
+            selected.sort(key=lambda row: row.get(column) or "", reverse=desc)
         if self.operation == "update":
             for row in selected:
                 row.update(self.payload)
@@ -399,6 +468,7 @@ def test_staff_rejection_stores_reason_and_alternatives_as_text(client, database
         json={"reason": "Unavailable", "alternative_venue_ids": ["VEN-002", "VEN-003"]},
     )
     assert response.status_code == 200
+    assert database.rows["venue_booking"][0]["status"] == "rejected"
     assert database.rows["venue_booking"][0]["decision_reason"] == (
         "Reason: Unavailable\nSuggested alternatives: VEN-002, VEN-003"
     )
@@ -430,8 +500,122 @@ def test_venue_block_uses_schema_and_staff_audit_fields(client, database):
     )
     assert response.status_code == 201
     block = database.rows["venue_block"][0]
+    assert set(block) == VENUE_BLOCK_COLUMNS
     assert block["start_datetime"] == "2026-11-16T09:00:00+08:00"
     assert block["created_by"] == "STAFF-1"
+    assert block["status"] == "active"
+
+
+def test_venue_block_overlapping_confirmed_booking_is_rejected(client, database):
+    database.auth.get_user.return_value.user.id = "STAFF-1"
+    database.rows["venue_booking"].append(
+        active_booking(
+            booking_id="confirmed-booking",
+            status="confirmed",
+            requested_start="2026-11-16T09:00:00+08:00",
+            requested_end="2026-11-16T11:00:00+08:00",
+        )
+    )
+
+    response = client.post(
+        "/api/venues/VEN-001/block",
+        headers=HEADERS,
+        json={
+            "block_date": "2026-11-16",
+            "start_time": "10:00",
+            "end_time": "12:00",
+            "reason": "Maintenance",
+        },
+    )
+
+    assert response.status_code == 409
+    assert database.rows["venue_block"] == []
+
+
+def test_venue_block_non_overlapping_confirmed_booking_succeeds(client, database):
+    database.auth.get_user.return_value.user.id = "STAFF-1"
+    database.rows["venue_booking"].append(
+        active_booking(
+            booking_id="confirmed-booking",
+            status="confirmed",
+            requested_start="2026-11-16T12:00:00+08:00",
+            requested_end="2026-11-16T14:00:00+08:00",
+        )
+    )
+
+    response = client.post(
+        "/api/venues/VEN-001/block",
+        headers=HEADERS,
+        json={
+            "block_date": "2026-11-16",
+            "start_time": "09:00",
+            "end_time": "10:00",
+            "reason": "Maintenance",
+        },
+    )
+
+    assert response.status_code == 201
+    assert database.rows["venue_block"][0]["status"] == "active"
+
+
+@pytest.mark.parametrize(
+    "booking_start,booking_end",
+    [
+        ("2026-11-16T08:00:00+08:00", "2026-11-16T09:00:00+08:00"),
+        ("2026-11-16T10:00:00+08:00", "2026-11-16T11:00:00+08:00"),
+    ],
+)
+def test_venue_block_allows_back_to_back_confirmed_booking(
+    client, database, booking_start, booking_end
+):
+    database.auth.get_user.return_value.user.id = "STAFF-1"
+    database.rows["venue_booking"].append(
+        active_booking(
+            booking_id="confirmed-booking",
+            status="confirmed",
+            requested_start=booking_start,
+            requested_end=booking_end,
+        )
+    )
+
+    response = client.post(
+        "/api/venues/VEN-001/block",
+        headers=HEADERS,
+        json={
+            "block_date": "2026-11-16",
+            "start_time": "09:00",
+            "end_time": "10:00",
+            "reason": "Maintenance",
+        },
+    )
+
+    assert response.status_code == 201
+    assert database.rows["venue_block"][0]["status"] == "active"
+
+
+def test_venue_staff_booking_list_orders_by_requested_at_ascending(client, database):
+    database.auth.get_user.return_value.user.id = "STAFF-1"
+    database.rows["venue_booking"].extend(
+        [
+            active_booking(
+                booking_id="later",
+                requested_at="2026-11-15T10:00:00+00:00",
+            ),
+            active_booking(
+                booking_id="earlier",
+                requested_at="2026-11-15T09:00:00+00:00",
+            ),
+        ]
+    )
+
+    response = client.get("/api/venue-bookings", headers=HEADERS)
+
+    assert response.status_code == 200
+    assert [row["booking_id"] for row in response.get_json()["requests"]] == [
+        "earlier",
+        "later",
+    ]
+    assert ("venue_booking", "order", ("requested_at", False)) in database.calls
 
 
 def test_venue_update_uses_live_schema_columns(client, database):
