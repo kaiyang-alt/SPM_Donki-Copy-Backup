@@ -157,3 +157,29 @@ Do not perform structural refactoring merely for cleanliness.
 
 Prefer the smallest coherent change. Avoid unrelated formatting or rewrite
 churn.
+
+## Ponytail
+
+- Choose the smallest clear, maintainable solution that fully meets the task,
+  including necessary caller and test changes. Preserve validation, error
+  handling, security and accessibility.
+- Reuse existing helpers, components and established project patterns first,
+  then standard-library or platform features and installed dependencies.
+- Avoid unnecessary abstractions, wrappers, configuration and dependencies.
+  Do not add flexibility or features for hypothetical future needs.
+
+## Stop That Shit
+
+- Reviews, answers and monitoring are read-only unless the user explicitly
+  authorises edits. A review finding is not permission to fix it.
+- Apply the existing story, file and approval boundaries throughout the task.
+  Trace affected callers and failure paths; complete necessary consequences
+  without absorbing another story or adding unrelated refactoring.
+- Add complexity or defensive mechanisms only to address a concrete requirement,
+  supported failure mode or existing guarantee; avoid speculative changes.
+- Run relevant, required verification. Reuse evidence that remains valid for the
+  final state; do not repeat checks or add audits without a concrete reason.
+- Stop when the requested result is complete, required checks support it and no
+  known in-scope blocker remains. Report unresolved blockers accurately.
+- Apply both sections as written instructions. Do not install or enable scripts,
+  hooks, monitoring or automatic enforcement as part of applying them.
