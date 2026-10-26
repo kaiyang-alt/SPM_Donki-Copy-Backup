@@ -62,6 +62,15 @@
 | `old_status` | `text` |  Nullable |
 | `new_status` | `text` |  Nullable |
 | `created_at` | `timestamptz` |  Nullable |
+| `change_request_id` | `uuid` | Nullable; part of the composite foreign key below |
+
+### Change-request audit relationship — verified 2026-10-26
+
+`cs_event_action_log_change_request_event_fkey` links
+`(change_request_id, event_id)` to
+`event_change_request(change_request_id, event_id)`. The validated composite
+foreign key prevents an audit entry from referencing another event's request.
+Existing audit entries may retain a null `change_request_id`.
 
 ## Table `event_change_request`
 
@@ -74,10 +83,21 @@
 | `requested_by` | `uuid` |  |
 | `proposed_changes` | `jsonb` |  Nullable |
 | `reason` | `text` |  Nullable |
-| `status` | `text` |  Nullable |
+| `status` | `text` | Nullable; CHECK permits `pending`, `agreed`, `rejected`, `applied`, `cancelled`, `awaiting_information` |
 | `created_at` | `timestamptz` |  Nullable |
 | `processed_by` | `uuid` |  Nullable |
 | `processed_at` | `timestamptz` |  Nullable |
+
+### Decision storage deployment — verified 2026-10-26
+
+`cs_change_request_event_pair_key` is a validated UNIQUE constraint on
+`(change_request_id, event_id)`, supporting the composite audit foreign key.
+The validated `event_change_requests_status_check` preserves existing statuses
+and additionally permits `awaiting_information`.
+
+Verification is based on the developer-supplied Supabase metadata result.
+This deployment adds decision storage only; it does not add decision RPCs,
+change RLS permissions, apply event changes or release venue/equipment records.
 
 ## Table `event_coordinator_reassignment`
 
