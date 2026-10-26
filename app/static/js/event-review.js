@@ -1,6 +1,9 @@
 // Story-specific review UI, using the shared panel, form and navigation patterns.
 let reviewData = null;
-const reviewLabels = {changes_requested: 'Clarification Required', planning: 'Planning', requested: 'Pending review'};
+const reviewLabels = {
+  changes_requested: 'Clarification Required', approved: 'Approved',
+  rejected: 'Rejected', requested: 'Pending review'
+};
 const reviewFields = [
   ['name', 'Event name'], ['purpose', 'Purpose'], ['description', 'Event requirements / description'],
   ['preferred_start_datetime', 'Preferred start'], ['preferred_end_datetime', 'Preferred end'],
@@ -98,14 +101,16 @@ function reviewPage() {
   const {event, actions, equipment} = reviewData;
   const coordinator = currentRole === 'coordinator';
   const editable = coordinator ? ['requested', 'changes_requested'].includes(event.status) : event.status === 'changes_requested';
-  const history = actions.filter(action => ['clarification_requested', 'clarification_provided', 'review_completed'].includes(action.action_type));
+  const history = actions.filter(action => [
+    'clarification_requested', 'clarification_provided', 'event_approved', 'event_rejected'
+  ].includes(action.action_type));
   return pageHead('Review event request', reviewLabels[event.status] || event.status) +
     `<section class="panel"><h2>${escapeHtml(event.name)}</h2>${reviewFields.map(([key,label]) => `<div class="equipment"><span>${label}</span><strong>${escapeHtml(event[key] ?? 'Not provided')}</strong></div>`).join('')}
     <div class="equipment"><span>Technical support required</span><strong>${event.technical_support_required == null ? 'Not provided' : event.technical_support_required ? 'Yes' : 'No'}</strong></div>
     <h3>Equipment requests</h3>${equipment.length ? equipment.map(item => `<div class="equipment"><span>${escapeHtml(item.equipment?.name || 'Equipment')} · ${escapeHtml(item.status)}</span><strong>${escapeHtml(item.quantity_requested)} · ${escapeHtml(item.technical_requirements || '')}</strong></div>`).join('') : '<p class="muted">No equipment reservations recorded. Review the technical requirements above.</p>'}
-    <h3>Clarification history</h3>${history.length ? history.map(action => `<div class="notice"><strong>${escapeHtml(action.action_type.replaceAll('_',' '))} · ${escapeHtml(action.created_at || '')}</strong><span>${escapeHtml(action.details)}</span></div>`).join('') : '<p class="muted">No clarification messages.</p>'}
-    ${editable ? `<form id="reviewForm"><div class="form-grid">${coordinator ? `<div class="field full"><label for="reviewStatus">Review decision</label><select id="reviewStatus" name="status"><option value="changes_requested">Require clarification</option><option value="planning">Reviewed — move to Planning</option></select></div>` : reviewFields.map(([key,label]) => `<div class="field full"><label for="amend-${key}">${label}</label><input id="amend-${key}" name="${key}" ${key === 'expected_attendance' ? 'type="number" step="1"' : ''} value="${escapeAttribute(event[key] ?? '')}"></div>`).join('')}
-    <div class="field full"><label for="reviewMessage">${coordinator ? 'Clarification message (required when requesting clarification)' : 'Clarification response'}</label><textarea id="reviewMessage" name="message" ${coordinator ? '' : 'required'}></textarea></div></div><p id="reviewError" class="form-error" role="alert"></p><div class="form-actions"><button class="btn btn-primary" type="submit">${coordinator ? 'Save review decision' : 'Submit clarification / amendments'}</button></div></form>` : '<p class="muted">This request is read-only in its current status.</p>'}
+    <h3>Review history</h3>${history.length ? history.map(action => `<div class="notice"><strong>${escapeHtml(action.action_type.replaceAll('_',' '))} · ${escapeHtml(action.created_at || '')}</strong><span>${escapeHtml(action.details)}</span></div>`).join('') : '<p class="muted">No review history.</p>'}
+    ${editable ? `<form id="reviewForm"><div class="form-grid">${coordinator ? '' : reviewFields.map(([key,label]) => `<div class="field full"><label for="amend-${key}">${label}</label><input id="amend-${key}" name="${key}" ${key === 'expected_attendance' ? 'type="number" step="1"' : ''} value="${escapeAttribute(event[key] ?? '')}"></div>`).join('')}
+    <div class="field full"><label for="reviewMessage">${coordinator ? 'Feedback (required for Reject or Request clarification; optional for Approve)' : 'Clarification response'}</label><textarea id="reviewMessage" name="message" ${coordinator ? '' : 'required'}></textarea></div></div><p id="reviewError" class="form-error" role="alert"></p><div class="form-actions">${coordinator ? '<button class="btn btn-soft" type="submit" data-review-decision="changes_requested">Request clarification</button><button class="btn btn-outline" type="submit" data-review-decision="rejected">Reject</button><button class="btn btn-primary" type="submit" data-review-decision="approved">Approve</button>' : '<button class="btn btn-primary" type="submit">Submit clarification / amendments</button>'}</div></form>` : '<p class="muted">This request is read-only in its current status.</p>'}
     <div class="form-actions"><button class="btn btn-soft" onclick="go(currentRole==='coordinator'?'assignments':'events')">Back to events</button></div></section>`;
 }
 
@@ -118,10 +123,22 @@ document.getElementById('mainContent').addEventListener('submit', async event =>
   event.preventDefault();
   const form = event.target;
   const error = document.getElementById('reviewError');
-  const button = form.querySelector('button[type="submit"]');
+  const button = event.submitter || form.querySelector('button[type="submit"]');
   const coordinator = currentRole === 'coordinator';
   const payload = {message: form.elements.message.value};
-  if (coordinator) payload.status = form.elements.status.value;
+  if (coordinator) {
+    payload.status = event.submitter?.dataset.reviewDecision;
+    if (!payload.status) {
+      error.textContent = 'Select a review action.';
+      return;
+    }
+    if (payload.status !== 'approved' && !payload.message.trim()) {
+      error.textContent = payload.status === 'rejected'
+        ? 'Rejection feedback is required.'
+        : 'A clarification message is required.';
+      return;
+    }
+  }
   else {
     payload.amendments = {};
     for (const [key] of reviewFields) {
