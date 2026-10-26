@@ -44,7 +44,7 @@
 | `registration_enabled` | `bool` |  Nullable |
 | `registration_open_at` | `timestamptz` |  Nullable |
 | `registration_close_at` | `timestamptz` |  Nullable |
-| `status` | `text` |  Nullable |
+| `status` | `text` |  Nullable; CHECK `events_status_check` permits `draft`, `requested`, `changes_requested`, `planning`, `approved`, `confirmed`, `completed`, `cancelled`, `withdrawn`, `rejected` |
 | `created_at` | `timestamptz` |  Nullable |
 | `updated_at` | `timestamptz` |  Nullable |
 
@@ -261,6 +261,14 @@ only that event SELECT policy and adds no columns or write permissions.
 
 ## RLS Policies
 
+### `event_action_log`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Event participants can view event action logs` | SELECT | authenticated | PERMISSIVE | Event organiser or assigned Event Coordinator for the referenced event | — |
+| `Assigned coordinators can create review action logs` | INSERT | authenticated | PERMISSIVE | — | Authenticated assigned Event Coordinator is the actor; action is an approved review transition (`clarification_requested`, `event_approved`, or `event_rejected`) matching the event's current status |
+| `Organisers can create clarification response logs` | INSERT | authenticated | PERMISSIVE | — | Authenticated Event Organiser is the actor and the event remains in `changes_requested` |
+
 ### `equipment`
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
@@ -364,6 +372,9 @@ only that event SELECT policy and adds no columns or write permissions.
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
+| `Assigned coordinators can notify event organisers` | INSERT | authenticated | PERMISSIVE | — | Sender is the assigned Event Coordinator, recipient is that event's Organiser, and notification type matches the event's `changes_requested`, `approved`, or `rejected` status |
+| `Organisers can notify coordinators of clarification` | INSERT | authenticated | PERMISSIVE | — | Sender is the event's Organiser, recipient is the assigned Coordinator, notification type is `clarification_provided`, and event status is `changes_requested` |
+| `Review notification senders can view sent notifications` | SELECT | authenticated | PERMISSIVE | Assigned Coordinators may view `clarification_requested`, `event_approved`, and `event_rejected` notifications sent to the event Organiser; Organisers may view `clarification_provided` notifications sent to the assigned Coordinator | — |
 | `Users can update own notifications` | UPDATE | authenticated | PERMISSIVE | `(recipient_id = auth.uid())` | `(recipient_id = auth.uid())` |
 | `Users can view own notifications` | SELECT | authenticated | PERMISSIVE | `(recipient_id = auth.uid())` | — |
 

@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -5,7 +6,8 @@ import pytest
 
 from app.app import app
 from app.services.event_review_service import (
-    ReviewError, get_review, list_review_events, respond_to_review, submit_review,
+    APPROVAL_DEFAULT_MESSAGE, ReviewError, get_review, list_review_events,
+    respond_to_review, submit_review,
 )
 
 
@@ -66,12 +68,55 @@ def test_unrelated_user_cannot_read_clarification_history(database):
 
 
 @pytest.mark.parametrize('status', ['requested', 'changes_requested'])
-def test_review_can_move_request_to_planning(database, status):
+def test_coordinator_can_approve_eligible_request(database, status):
     _, tables, event = database
     event['status'] = status
-    submit_review('token', 'evt', {'status': 'planning'})
-    assert tables['event'].update.call_args.args[0]['status'] == 'planning'
-    assert tables['event_action_log'].insert.call_args.args[0]['action_type'] == 'review_completed'
+    submit_review('token', 'evt', {'status': 'approved', 'message': 'Ready to proceed.'})
+    assert tables['event'].update.call_args.args[0]['status'] == 'approved'
+    log = tables['event_action_log'].insert.call_args.args[0]
+    assert (log['action_type'], log['actor_id'], log['old_status'], log['new_status']) == (
+        'event_approved', 'coord', status, 'approved')
+    assert log['created_at']
+    notification = tables['notification'].insert.call_args.args[0]
+    assert (notification['recipient_id'], notification['type'], notification['message']) == (
+        'org', 'event_approved', 'Ready to proceed.')
+    assert notification['created_at'] == log['created_at']
+
+
+def test_approval_without_feedback_uses_default_notification(database):
+    _, tables, _ = database
+    submit_review('token', 'evt', {'status': 'approved', 'message': '  '})
+    notification = tables['notification'].insert.call_args.args[0]
+    assert notification['message'] == APPROVAL_DEFAULT_MESSAGE
+    assert tables['event_action_log'].insert.call_args.args[0]['details'] == APPROVAL_DEFAULT_MESSAGE
+
+
+@pytest.mark.parametrize('status', ['requested', 'changes_requested'])
+def test_rejection_records_required_feedback_and_notifies_organiser(database, status):
+    _, tables, event = database
+    event['status'] = status
+    submit_review('token', 'evt', {'status': 'rejected', 'message': 'Safety details are incomplete.'})
+    assert tables['event'].update.call_args.args[0]['status'] == 'rejected'
+    log = tables['event_action_log'].insert.call_args.args[0]
+    assert (log['action_type'], log['old_status'], log['new_status'], log['details']) == (
+        'event_rejected', status, 'rejected', 'Safety details are incomplete.')
+    notification = tables['notification'].insert.call_args.args[0]
+    assert (notification['recipient_id'], notification['type']) == ('org', 'event_rejected')
+
+
+def test_rejection_without_feedback_has_no_side_effects(database):
+    _, tables, _ = database
+    with pytest.raises(ReviewError, match='rejection feedback'):
+        submit_review('token', 'evt', {'status': 'rejected', 'message': ' '})
+    tables['event'].update.assert_not_called()
+    tables['event_action_log'].insert.assert_not_called()
+    tables['notification'].insert.assert_not_called()
+
+
+def test_review_interface_has_distinct_approve_and_reject_controls():
+    source = Path('app/static/js/event-review.js').read_text(encoding='utf-8')
+    assert 'data-review-decision="approved">Approve</button>' in source
+    assert 'data-review-decision="rejected">Reject</button>' in source
 
 
 @pytest.mark.parametrize('failure', ['assignment', 'role', 'state', 'message', 'status'])
@@ -123,7 +168,7 @@ def test_concurrent_update_does_not_send_message(database):
     _, tables, _ = database
     tables['event'].update.return_value.execute.return_value.data = []
     with pytest.raises(ReviewError) as error:
-        submit_review('token', 'evt', {'status': 'planning'})
+        submit_review('token', 'evt', {'status': 'approved'})
     assert error.value.status == 409
     tables['event_action_log'].insert.assert_not_called()
 
@@ -139,16 +184,16 @@ def test_partial_write_failure_is_reported(database):
 def test_review_routes_require_authentication_and_object_payload():
     client = app.test_client()
     assert client.get('/api/event-reviews').status_code == 401
-    assert client.post('/api/event-reviews/evt/decision', json=['planning']).status_code == 400
+    assert client.post('/api/event-reviews/evt/decision', json=['approved']).status_code == 400
 
 
 @patch('app.routes.event_reviews.submit_review')
 def test_decision_route_passes_authenticated_input(operation):
-    operation.return_value = {'event_id': 'evt', 'status': 'planning'}
+    operation.return_value = {'event_id': 'evt', 'status': 'approved'}
     response = app.test_client().post('/api/event-reviews/evt/decision',
-        headers={'Authorization': 'Bearer token'}, json={'status': 'planning'})
+        headers={'Authorization': 'Bearer token'}, json={'status': 'approved'})
     assert response.status_code == 200
-    operation.assert_called_once_with('token', 'evt', {'status': 'planning'})
+    operation.assert_called_once_with('token', 'evt', {'status': 'approved'})
 
 
 @patch("app.routes.auth.login_user")
