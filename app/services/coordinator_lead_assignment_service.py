@@ -56,6 +56,38 @@ def get_assignment_context(access_token):
     return {"events": events, "coordinators": coordinators}
 
 
+def get_unassigned_event_request(access_token, event_id):
+    client, _ = _lead_session(access_token)
+    try:
+        events = (
+            client.table("event")
+            .select(
+                "event_id,name,purpose,description,status,organiser_id,"
+                "preferred_start_datetime,preferred_end_datetime,"
+                "expected_attendance,venue_requirements,accessibility_needs,"
+                "layout_requirements,technical_support_required,"
+                "technical_requirements,registration_enabled,coordinator_id"
+            )
+            .eq("event_id", event_id)
+            .eq("status", "requested")
+            .is_("coordinator_id", "null")
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:
+        raise CoordinatorLeadAssignmentError(
+            "Unable to load the unassigned event request.", 502
+        ) from exc
+
+    if not events:
+        raise CoordinatorLeadAssignmentError(
+            "Unassigned event request not found.", 404
+        )
+    return events[0]
+
+
 def get_reassignment_context(access_token):
     client, _ = _lead_session(access_token)
     try:

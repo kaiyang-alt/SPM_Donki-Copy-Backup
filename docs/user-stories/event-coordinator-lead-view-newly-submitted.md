@@ -9,7 +9,10 @@ As an Event Coordinator Lead, I want to view newly submitted unassigned event re
 - AC1: The Event Coordinator Lead can view submitted event requests that do not yet have an assigned Event Coordinator.
 - AC2: The Event Coordinator Lead can view basic event information needed to support assignment.
 - AC3: Unassigned requests are distinguishable from already assigned requests.
-- AC4: Only a user authenticated with the appropriate role can access the unassigned queue.
+- AC4: The Event Coordinator Lead can open an unassigned request and review its available event information before assignment.
+- AC5: A successfully assigned request is removed from the unassigned queue.
+- AC6: Only a user authenticated with the appropriate Event Coordinator Lead role can access the unassigned queue and request details.
+- AC7: A normal Event Coordinator or another unauthorised role cannot use the Lead assignment queue or open its request details.
 
 ## Relevant Customer Clarifications
 
@@ -40,4 +43,5 @@ No story-specific UML is currently documented.
 - Use the existing `requested` status and a null `event.coordinator_id`; do not introduce a new event status for the queue.
 - Enforce queue access through the existing authentication and RLS model.
 - Reuse the unassigned-request query and queue established by the Lead assignment story.
+- Request details remain available only while the event is in `requested` status and has no assigned Coordinator.
 - Follow the shared `route -> service/business logic -> Supabase` flow.

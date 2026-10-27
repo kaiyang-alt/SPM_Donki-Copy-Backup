@@ -6,6 +6,7 @@ from app.services.coordinator_lead_assignment_service import (
     get_assignment_context,
     get_current_assignments,
     get_reassignment_context,
+    get_unassigned_event_request,
     reassign_event,
 )
 
@@ -45,6 +46,13 @@ def reassignment_context():
 @coordinator_lead_assignment_blueprint.get("/current-assignments")
 def current_assignments():
     return _error_response(get_current_assignments)
+
+
+@coordinator_lead_assignment_blueprint.get("/events/<event_id>/unassigned-request")
+def unassigned_event_request(event_id):
+    return _error_response(
+        lambda token: {"event": get_unassigned_event_request(token, event_id)}
+    )
 
 
 @coordinator_lead_assignment_blueprint.post("/events/<event_id>/assign")
