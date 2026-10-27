@@ -59,7 +59,9 @@ def test_reassignment_context_displays_current_coordinator(create_client):
         {"user_id": "coordinator-1"},
         {"user_id": "coordinator-2"},
     ]
-    tables["profile"].select.return_value.execute.return_value.data = [
+    tables[
+        "profile"
+    ].select.return_value.eq.return_value.execute.return_value.data = [
         {"user_id": "coordinator-1", "name": "Maya Tan"},
         {"user_id": "coordinator-2", "name": "Daniel Koh"},
     ]
@@ -71,6 +73,7 @@ def test_reassignment_context_displays_current_coordinator(create_client):
         "Daniel Koh",
         "Maya Tan",
     ]
+    tables["profile"].select.return_value.eq.assert_called_once_with("active", True)
 
 
 @patch(
@@ -92,36 +95,99 @@ def test_lead_reassigns_event_and_notifies_outgoing_incoming_and_organiser(
     tables[
         "event"
     ].select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [event]
-    update = tables["event"].update.return_value
-    update.eq.return_value = update
-    update.execute.return_value.data = [
-        {**event, "coordinator_id": "coordinator-2"}
-    ]
-    tables["notification"].insert.return_value.execute.return_value.data = [
-        {"notification_id": "notification-1"},
-        {"notification_id": "notification-2"},
-        {"notification_id": "notification-3"},
-    ]
     tables[
         "profile"
-    ].select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
+    ].select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
         {"name": "Daniel Koh"}
     ]
+    client.rpc.return_value.execute.return_value.data = {
+        **event,
+        "coordinator_id": "coordinator-2",
+        "coordinator_name": "Daniel Koh",
+        "previous_coordinator_id": "coordinator-1",
+        "assigned_by": "lead-1",
+    }
 
     result = reassign_event("token", "event-1", "coordinator-2")
 
     assert result["coordinator_id"] == "coordinator-2"
     assert result["coordinator_name"] == "Daniel Koh"
     assert result["previous_coordinator_id"] == "coordinator-1"
-    update.eq.assert_any_call("event_id", "event-1")
-    update.eq.assert_any_call("coordinator_id", "coordinator-1")
-    notifications = tables["notification"].insert.call_args.args[0]
-    assert {row["recipient_id"] for row in notifications} == {
-        "coordinator-1",
-        "coordinator-2",
-        "organiser-1",
-    }
-    assert {row["type"] for row in notifications} == {"coordinator_reassigned"}
+    client.rpc.assert_called_once_with(
+        "reassign_event_coordinator",
+        {
+            "p_event_id": "event-1",
+            "p_previous_coordinator_id": "coordinator-1",
+            "p_replacement_coordinator_id": "coordinator-2",
+        },
+    )
+    tables["event"].update.assert_not_called()
+    tables["notification"].insert.assert_not_called()
+
+
+@patch(
+    "app.services.coordinator_lead_assignment_service.create_authenticated_supabase_client"
+)
+def test_inactive_coordinator_cannot_receive_reassignment(create_client):
+    client, tables = _client()
+    create_client.return_value = client
+    _lead_and_coordinator_roles(tables)
+    tables[
+        "profile"
+    ].select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
+
+    with pytest.raises(CoordinatorLeadAssignmentError) as error:
+        reassign_event("token", "event-1", "coordinator-inactive")
+
+    assert "not active" in str(error.value)
+    client.rpc.assert_not_called()
+
+
+@patch(
+    "app.services.coordinator_lead_assignment_service.create_authenticated_supabase_client"
+)
+def test_non_lead_cannot_reassign_event(create_client):
+    client, tables = _client()
+    create_client.return_value = client
+    tables[
+        "user_role"
+    ].select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = []
+
+    with pytest.raises(CoordinatorLeadAssignmentError) as error:
+        reassign_event("token", "event-1", "coordinator-2")
+
+    assert error.value.status == 403
+    client.rpc.assert_not_called()
+
+
+@patch(
+    "app.services.coordinator_lead_assignment_service.create_authenticated_supabase_client"
+)
+def test_stale_reassignment_is_reported_as_conflict(create_client):
+    client, tables = _client()
+    create_client.return_value = client
+    _lead_and_coordinator_roles(tables)
+    tables[
+        "profile"
+    ].select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
+        {"name": "Daniel Koh"}
+    ]
+    tables[
+        "event"
+    ].select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [
+        {
+            "event_id": "event-1",
+            "coordinator_id": "coordinator-1",
+        }
+    ]
+    client.rpc.return_value.execute.side_effect = Exception(
+        "The current assignment changed before reassignment completed."
+    )
+
+    with pytest.raises(CoordinatorLeadAssignmentError) as error:
+        reassign_event("token", "event-1", "coordinator-2")
+
+    assert error.value.status == 409
 
 
 @patch(
@@ -144,8 +210,7 @@ def test_reassignment_rejects_current_coordinator_as_replacement(create_client):
         reassign_event("token", "event-1", "coordinator-1")
 
     assert "different Event Coordinator" in str(error.value)
-    tables["event"].update.assert_not_called()
-    tables["notification"].insert.assert_not_called()
+    client.rpc.assert_not_called()
 
 
 @patch(
@@ -165,7 +230,7 @@ def test_reassignment_rejects_unassigned_event(create_client):
         reassign_event("token", "event-1", "coordinator-2")
 
     assert error.value.status == 409
-    tables["event"].update.assert_not_called()
+    client.rpc.assert_not_called()
 
 
 def test_reassignment_route_requires_json_object():

@@ -337,9 +337,10 @@ The approved Event Coordinator Lead assignment migrations provide:
 |---|---|---|
 | `is_event_coordinator_lead()` | Function | Confirms that `auth.uid()` holds the `event_coordinator_lead` role. |
 | `assign_unassigned_event(uuid, uuid)` | Transactional function | Validates an active Event Coordinator, assigns one requested unassigned event, and creates Coordinator and Organiser notifications atomically. |
+| `reassign_event_coordinator(uuid, uuid, uuid)` | Transactional function | Validates the expected current owner and active replacement, replaces ownership, and creates outgoing Coordinator, incoming Coordinator, and Organiser notifications atomically. |
 | `trg_enforce_coordinator_assignment_actor` | `event` trigger | Rejects any `coordinator_id` change made by a caller without the Event Coordinator Lead role. |
 
-The assignment function uses the authenticated caller and existing RLS policies;
-it does not use a service-role key or bypass RLS.
+The assignment functions use the authenticated caller and existing RLS policies;
+they do not use a service-role key or bypass RLS.
 
 

@@ -211,6 +211,21 @@ def reassign_event(access_token, event_id, coordinator_id):
                 "The selected user is not an Event Coordinator."
             )
 
+        profile_rows = (
+            client.table("profile")
+            .select("name")
+            .eq("user_id", coordinator_id)
+            .eq("active", True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if not profile_rows:
+            raise CoordinatorLeadAssignmentError(
+                "The selected Event Coordinator is not active."
+            )
+
         event_rows = (
             client.table("event")
             .select("event_id,name,status,organiser_id,coordinator_id")
@@ -233,72 +248,47 @@ def reassign_event(access_token, event_id, coordinator_id):
                 "Select a different Event Coordinator for reassignment."
             )
 
-        now = datetime.now(timezone.utc).isoformat()
-        update = (
-            client.table("event")
-            .update({"coordinator_id": coordinator_id, "updated_at": now})
-            .eq("event_id", event_id)
-            .eq("coordinator_id", previous_coordinator_id)
+        reassigned = (
+            client.rpc(
+                "reassign_event_coordinator",
+                {
+                    "p_event_id": event_id,
+                    "p_previous_coordinator_id": previous_coordinator_id,
+                    "p_replacement_coordinator_id": coordinator_id,
+                },
+            )
             .execute()
             .data
-            or []
         )
-        if not update:
+        if not reassigned:
             raise CoordinatorLeadAssignmentError(
                 "The assignment changed before reassignment completed. Reload it before retrying.",
                 409,
             )
-
-        event_name = event.get("name") or "Untitled event"
-        notifications = [
-            {
-                "event_id": event_id,
-                "recipient_id": previous_coordinator_id,
-                "type": "coordinator_reassigned",
-                "message": f"You are no longer assigned to {event_name}.",
-                "created_at": now,
-            },
-            {
-                "event_id": event_id,
-                "recipient_id": coordinator_id,
-                "type": "coordinator_reassigned",
-                "message": f"You have been assigned to {event_name}.",
-                "created_at": now,
-            },
-            {
-                "event_id": event_id,
-                "recipient_id": event.get("organiser_id"),
-                "type": "coordinator_reassigned",
-                "message": f"The Event Coordinator for {event_name} has changed.",
-                "created_at": now,
-            },
-        ]
-        saved = client.table("notification").insert(notifications).execute().data
-        if not saved:
-            raise CoordinatorLeadAssignmentError(
-                "The event was reassigned, but notifications could not be created.", 502
-            )
-
-        profile_rows = (
-            client.table("profile")
-            .select("name")
-            .eq("user_id", coordinator_id)
-            .limit(1)
-            .execute()
-            .data
-            or []
-        )
     except CoordinatorLeadAssignmentError:
         raise
     except Exception as exc:
+        message = str(exc).lower()
+        if "current assignment changed" in message:
+            raise CoordinatorLeadAssignmentError(
+                "The assignment changed before reassignment completed. Reload it before retrying.",
+                409,
+            ) from exc
+        if "not an active event coordinator" in message:
+            raise CoordinatorLeadAssignmentError(
+                "The selected Event Coordinator is not active."
+            ) from exc
         raise CoordinatorLeadAssignmentError("Unable to reassign the event.", 502) from exc
 
-    reassigned = update[0]
-    reassigned["coordinator_name"] = (
-        profile_rows[0].get("name") if profile_rows else None
-    )
-    reassigned["previous_coordinator_id"] = previous_coordinator_id
-    reassigned["assigned_by"] = lead_id
+    if isinstance(reassigned, list):
+        reassigned = reassigned[0]
+    reassigned["coordinator_name"] = reassigned.get(
+        "coordinator_name"
+    ) or profile_rows[0].get("name")
+    reassigned["previous_coordinator_id"] = reassigned.get(
+        "previous_coordinator_id"
+    ) or previous_coordinator_id
+    reassigned["assigned_by"] = reassigned.get("assigned_by") or lead_id
     return reassigned
 
 
@@ -312,7 +302,14 @@ def _coordinators(client):
         or []
     )
     coordinator_ids = {row.get("user_id") for row in role_rows if row.get("user_id")}
-    profiles = client.table("profile").select("user_id,name").execute().data or []
+    profiles = (
+        client.table("profile")
+        .select("user_id,name")
+        .eq("active", True)
+        .execute()
+        .data
+        or []
+    )
     coordinators = [
         {"user_id": row.get("user_id"), "name": row.get("name") or "Unnamed coordinator"}
         for row in profiles
