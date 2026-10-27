@@ -51,13 +51,26 @@
     const r = item.reservation, id = r.reservation_id, check = checks[id];
     const agreed = r.proposal_version > 0 && r.organiser_agreed_version === r.proposal_version && r.organiser_agreed_by && r.organiser_agreed_at;
     const eligible = r.status === 'requested' && ['planning', 'confirmed'].includes(item.event.status);
-    return `<section class="panel" style="margin-bottom:20px">${details(item)}` +
-      field('Request status', r.status) +
-      (eligible ? proposalForm(item.event, r) + field('Organiser agreement', agreed ? 'Agreed to current proposal' : 'Awaiting organiser agreement') : '') +
-      `<p class="muted">${check ? `Available quantity: ${escapeHtml(check.available_quantity)}${check.sufficient_stock ? '' : ' — insufficient stock for this request.'}` : 'Check stock before acceptance. Earlier requests retain priority.'}</p>` +
-      (eligible ? `<div class="form-actions"><button class="btn btn-soft" data-equipment-check="${escapeAttribute(id)}" ${busy || !r.quantity_suggested ? 'disabled' : ''}>Check availability</button>` +
-        `<button class="btn btn-primary" data-equipment-accept="${escapeAttribute(id)}" ${busy || !agreed || !check?.sufficient_stock ? 'disabled' : ''}>Accept reviewed request</button></div>` :
-        `<p class="muted">${r.status === 'reserved' ? 'Reservation saved.' : 'Event is not eligible for acceptance.'}</p>`) + '</section>';
+    const availability = !check
+      ? {kind: 'neutral', title: 'Availability not checked', text: 'Check current stock and scheduling before acceptance. Earlier requests retain priority.'}
+      : check.error
+        ? {kind: 'error', title: 'Availability check could not be completed', text: check.error}
+        : check.sufficient_stock
+          ? {kind: 'success', title: `${check.available_quantity} available`, text: `Enough stock is available for the suggested quantity of ${r.quantity_suggested}.`}
+          : {kind: 'warning', title: 'Not enough equipment available', text: `Available quantity: ${check.available_quantity} — insufficient stock for this request.`};
+    return `<section class="panel equipment-review-card" style="margin-bottom:20px">` +
+      `<div class="panel-head equipment-review-head"><div><p class="equipment-kicker">Equipment request</p><h2>${escapeHtml(item.event.name || r.event_id)}</h2></div>` +
+      `<span class="status ${r.status === 'reserved' ? 'confirmed' : 'pending'}">${escapeHtml(r.status)}</span></div>` +
+      `<div class="equipment-summary-grid">${field('Equipment', item.equipment.name || r.equipment_id)}` +
+      field('Type', item.equipment.type) + field('Suggested quantity', r.quantity_suggested ?? 'Not proposed') +
+      field('Request status', r.status) + `</div><p class="equipment-period">${escapeHtml(period(r))}</p>` +
+      (eligible ? `<div class="equipment-review-section">${proposalForm(item.event, r)}</div>` +
+        `<div class="equipment-review-section equipment-decision"><div class="equipment-agreement"><span>Organiser agreement</span><strong>${agreed ? 'Agreed to current proposal' : 'Awaiting organiser agreement'}</strong></div>` +
+        `<div class="availability-state availability-${availability.kind}" role="${availability.kind === 'error' ? 'alert' : 'status'}"><div class="availability-icon" aria-hidden="true">${availability.kind === 'success' ? '✓' : availability.kind === 'warning' || availability.kind === 'error' ? '!' : '○'}</div>` +
+        `<div><strong>${escapeHtml(availability.title)}</strong><p>${escapeHtml(availability.text)}</p></div></div>` +
+        `<div class="equipment-actions"><button class="btn btn-soft" data-equipment-check="${escapeAttribute(id)}" ${busy || !r.quantity_suggested ? 'disabled' : ''}>Check availability</button>` +
+        `<button class="btn btn-primary" data-equipment-accept="${escapeAttribute(id)}" ${busy || !agreed || !check?.sufficient_stock ? 'disabled' : ''}>Accept reviewed request</button></div></div>` :
+        `<div class="availability-state availability-${r.status === 'reserved' ? 'success' : 'neutral'}"><div class="availability-icon" aria-hidden="true">${r.status === 'reserved' ? '✓' : '○'}</div><div><strong>${r.status === 'reserved' ? 'Reservation saved' : 'Request unavailable'}</strong><p>${r.status === 'reserved' ? 'This equipment reservation has been recorded.' : 'This event is not eligible for acceptance.'}</p></div></div>`) + '</section>';
   }
 
   function eventDetails(item) {
@@ -236,7 +249,10 @@
         checks = {};
       } else checks[id] = data;
     } catch (err) {
-      if (current(generation)) { error = err.message; delete checks[id]; }
+      if (current(generation)) {
+        if (accept) { error = err.message; delete checks[id]; }
+        else { error = ''; checks[id] = {error: err.message, sufficient_stock: false}; }
+      }
     } finally {
       if (current(generation)) { busy = false; render(); }
     }
