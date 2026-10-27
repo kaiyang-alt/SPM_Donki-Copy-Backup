@@ -3,8 +3,8 @@
   const API = '/api/equipment-requests';
   const reviewPages = new Set(['dashboard', 'assignments', 'equipment', 'equipmentdetails', 'equipmentevent']);
   let sessionToken = null, epoch = 0, rows = null, selected = null, detail = null;
-  let events = [], catalogue = [], selectedEvent = null;
-  let checks = {}, error = '', confirmation = null, busy = false;
+  let events = [], catalogue = [], catalogueItems = [], selectedEvent = null;
+  let checks = {}, error = '', notice = '', confirmation = null, busy = false;
   const visible = () => currentRole === 'technical' && reviewPages.has(currentPage) && document.getElementById('equipmentReview');
   const current = generation => generation === epoch && sessionToken === authSession?.access_token;
   const period = row => [row.start_datetime, row.end_datetime].map(value => {
@@ -19,8 +19,8 @@
   function resetSession() {
     if (sessionToken !== authSession?.access_token) {
       sessionToken = authSession?.access_token; epoch++;
-      rows = null; selected = null; detail = null; checks = {}; events = []; catalogue = []; selectedEvent = null;
-      error = ''; confirmation = null; busy = false;
+      rows = null; selected = null; detail = null; checks = {}; events = []; catalogue = []; catalogueItems = []; selectedEvent = null;
+      error = ''; notice = ''; confirmation = null; busy = false;
     }
   }
 
@@ -103,6 +103,41 @@
       `<button class="btn btn-soft" data-equipment-event="${escapeAttribute(event.event_id)}" ${busy ? 'disabled' : ''}>Open organiser request</button></article>`;
   }
 
+  const statusLabel = status => ({available: 'Available', damaged: 'Damaged', under_repair: 'Under Repair', unavailable: 'Unavailable'})[status] || status;
+
+  function operationalCatalogue() {
+    const body = !catalogueItems.length
+      ? '<p class="muted">No equipment catalogue items are visible to your account.</p>'
+      : catalogueItems.map(item => `<form data-equipment-status-form="${escapeAttribute(item.equipment_id)}" class="event-card" style="margin-bottom:12px">` +
+          `<h3>${escapeHtml(item.name || 'Unnamed equipment')}</h3>` +
+          field('Type', item.type) + field('Total quantity', item.total_quantity) +
+          `<div class="field"><label>Operational status<select name="operational_status">${['available', 'damaged', 'under_repair', 'unavailable'].map(status =>
+            `<option value="${status}" ${item.operational_status === status ? 'selected' : ''}>${statusLabel(status)}</option>`).join('')}</select></label></div>` +
+          `<p class="muted">${item.active ? 'Active catalogue item' : 'Inactive catalogue item; it remains excluded from new reservations.'}</p>` +
+          `<button class="btn btn-soft" type="submit" ${busy ? 'disabled' : ''}>Save operational status</button></form>`).join('');
+    return `<section class="panel" style="margin-bottom:20px"><h2>Equipment operational status</h2>` +
+      '<p class="muted">Only active items marked Available can be selected for a new reservation.</p>' + body + '</section>';
+  }
+
+  async function saveOperationalStatus(form) {
+    if (busy) return;
+    const generation = epoch, id = form.dataset.equipmentStatusForm;
+    busy = true; error = ''; notice = ''; render();
+    try {
+      const saved = await request(`/catalogue/${encodeURIComponent(id)}/operational-status`, 'PATCH', {
+        operational_status: form.elements.operational_status.value
+      });
+      if (!current(generation)) return;
+      catalogueItems = catalogueItems.map(item => item.equipment_id === id ? saved : item);
+      catalogue = catalogue.filter(item => item.equipment_id !== id);
+      if (saved.active && saved.operational_status === 'available') catalogue.push(saved);
+      catalogue.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      checks = {};
+      notice = `${saved.name || 'Equipment'} is now ${statusLabel(saved.operational_status)}.`;
+    } catch (err) { if (current(generation)) error = err.message; }
+    finally { if (current(generation)) { busy = false; render(); } }
+  }
+
   async function saveProposal(form) {
     if (busy) return;
     const values = form.elements;
@@ -125,7 +160,7 @@
   function page() {
     resetSession();
     const isDetail = currentPage === 'equipmentdetails';
-    const title = isDetail ? 'Equipment request details' : currentPage === 'dashboard' ? 'Technical operations' : currentPage === 'assignments' ? 'Event equipment requests' : 'Equipment requests';
+    const title = isDetail ? 'Equipment request details' : currentPage === 'dashboard' ? 'Technical operations' : currentPage === 'assignments' ? 'Event equipment requests' : 'Equipment';
     let content;
     if (currentPage === 'equipmentevent') {
       const event = events.find(e => e.event_id === selectedEvent);
@@ -147,12 +182,13 @@
         ['Accepted equipment requests', String(rows.filter(item => item.reservation.status === 'reserved').length), '✓', 'Saved reservations']
       ]) + content;
     }
+    if (currentPage === 'equipment' && !isDetail) content = operationalCatalogue() + content;
     if (confirmation) content = `<section class="panel" role="status" style="margin-bottom:20px"><h2>Equipment reservation confirmed</h2>${details(confirmation)}<p class="muted">Saved status: ${escapeHtml(confirmation.reservation.status)}</p>` +
       (confirmation.event.status === 'planning' ? '<p class="notice">The reservation is available to the assigned Coordinator under Event Readiness for final approval. The event remains in planning until the Coordinator confirms that all arrangements are ready.</p>' : '') + '</section>' + content;
     const back = isDetail || currentPage === 'equipmentevent' ? '<button class="btn btn-soft" id="equipmentBack">Back to requests</button>' : '';
     return pageHead(title, 'Review organiser requirements, propose quantities, and reserve agreed equipment.',
       `${back}<button class="btn btn-soft" id="equipmentRefresh" ${busy ? 'disabled' : ''}>Refresh</button>`) +
-      `<div id="equipmentReview"><p class="form-error" role="alert" aria-live="polite">${escapeHtml(error)}</p>${content}</div>`;
+      `<div id="equipmentReview"><p class="form-error" role="alert" aria-live="polite">${escapeHtml(error)}</p><p role="status" aria-live="polite">${escapeHtml(notice)}</p>${content}</div>`;
   }
 
   function render() { if (visible()) renderPage(); }
@@ -160,7 +196,7 @@
   async function load() {
     if (busy) return;
     const generation = epoch, id = currentPage === 'equipmentdetails' ? selected : null;
-    busy = true; error = ''; confirmation = null; checks = {}; render();
+    busy = true; error = ''; notice = ''; confirmation = null; checks = {}; render();
     try {
       if (id) {
         const data = await request(`/${encodeURIComponent(id)}`);
@@ -169,11 +205,12 @@
         // Organiser requirements must remain visible even if an older equipment
         // row has inaccessible metadata. Report each failure without hiding the
         // independently loaded inbox.
-        const results = await Promise.allSettled([request(''), request('/context')]);
+        const results = await Promise.allSettled([request(''), request('/context'), request('/catalogue')]);
         if (!current(generation)) return;
         rows = results[0].status === 'fulfilled' ? results[0].value.requests.filter(item => ['planning', 'confirmed'].includes(item.event.status)) : [];
         const context = results[1].status === 'fulfilled' ? results[1].value : {};
         events = (context.events || []).filter(event => ['planning', 'confirmed'].includes(event.status)); catalogue = context.equipment || [];
+        catalogueItems = results[2].status === 'fulfilled' ? results[2].value.equipment || [] : [];
         error = results.filter(result => result.status === 'rejected').map(result => result.reason.message).join(' ');
       }
     } catch (err) {
@@ -222,6 +259,9 @@
     });
     document.querySelectorAll('[data-equipment-proposal]').forEach(form => {
       form.onsubmit = event => { event.preventDefault(); saveProposal(form); };
+    });
+    document.querySelectorAll('[data-equipment-status-form]').forEach(form => {
+      form.onsubmit = event => { event.preventDefault(); saveOperationalStatus(form); };
     });
     document.querySelectorAll('[data-equipment-open]').forEach(button => {
       button.onclick = () => {
