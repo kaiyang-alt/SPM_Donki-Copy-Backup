@@ -7,10 +7,15 @@ As an Event Coordinator Lead, I want to assign an unassigned event request to an
 ## Acceptance Criteria
 
 - AC1: The Event Coordinator Lead can select an unassigned event request.
-- AC2: The Event Coordinator Lead can assign an Event Coordinator to the selected request.
-- AC3: The assigned Event Coordinator is displayed after a successful assignment.
-- AC4: The event request is no longer shown as unassigned after a successful assignment.
-- AC5: The system triggers notifications to the relevant users when the assignment occurs.
+- AC2: The Event Coordinator Lead can view active Event Coordinators available for assignment.
+- AC3: The Event Coordinator Lead manually selects one Event Coordinator for the request; no automatic selection algorithm is used.
+- AC4: An event has no more than one assigned Event Coordinator at any point in time.
+- AC5: The selected Event Coordinator is displayed as the current Coordinator after successful assignment.
+- AC6: The event request is no longer shown as unassigned after successful assignment.
+- AC7: The assigned Event Coordinator can access and manage the event through the Coordinator workflow.
+- AC8: Another Event Coordinator does not gain management access merely by holding the Event Coordinator role.
+- AC9: Successful assignment notifies the assigned Event Coordinator and Event Organiser.
+- AC10: Unauthorised roles cannot assign an Event Coordinator.
 
 ## Relevant Customer Clarifications
 
@@ -18,6 +23,8 @@ As an Event Coordinator Lead, I want to assign an unassigned event request to an
 - The database role value is `event_coordinator_lead`, which is distinct from `event_coordinator`.
 - A successful assignment notifies the newly assigned Event Coordinator and the Event Organiser.
 - The event remains in the existing `requested` status after assignment.
+- Coordinator selection is manual; no automatic best-Coordinator algorithm is used.
+- Only users with an active profile and the `event_coordinator` role are available for selection.
 
 ## Preconditions / Dependencies
 
@@ -46,3 +53,5 @@ No story-specific UML is currently documented.
 - Assignment updates `event.coordinator_id` without changing the event's `requested` status.
 - Assignment notifications use the existing `notification` table and the `coordinator_assigned` notification type.
 - The story-specific database migration disables the old automatic-assignment trigger and adds narrowly scoped Lead RLS policies.
+- The approved transactional assignment function validates the Lead, request and active Coordinator, then saves the assignment and both notifications atomically.
+- A database trigger prevents `event.coordinator_id` changes by non-Lead callers even when another permissive event-update policy applies.
