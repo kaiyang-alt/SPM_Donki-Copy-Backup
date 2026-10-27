@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from app.supabase_client import create_authenticated_supabase_client
 
 
@@ -40,7 +38,14 @@ def get_assignment_context(access_token):
         coordinator_ids = {
             row.get("user_id") for row in role_rows if row.get("user_id")
         }
-        profiles = client.table("profile").select("user_id,name").execute().data or []
+        profiles = (
+            client.table("profile")
+            .select("user_id,name")
+            .eq("active", True)
+            .execute()
+            .data
+            or []
+        )
     except Exception as exc:
         raise CoordinatorLeadAssignmentError(
             "Unable to load coordinator assignment information.", 502
@@ -106,6 +111,21 @@ def assign_event(access_token, event_id, coordinator_id):
                 "The selected user is not an Event Coordinator."
             )
 
+        profile_rows = (
+            client.table("profile")
+            .select("name")
+            .eq("user_id", coordinator_id)
+            .eq("active", True)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if not profile_rows:
+            raise CoordinatorLeadAssignmentError(
+                "The selected Event Coordinator is not active."
+            )
+
         event_rows = (
             client.table("event")
             .select("event_id,name,status,organiser_id,coordinator_id")
@@ -127,67 +147,45 @@ def assign_event(access_token, event_id, coordinator_id):
                 "This event request is already assigned.", 409
             )
 
-        now = datetime.now(timezone.utc).isoformat()
-        update = (
-            client.table("event")
-            .update({"coordinator_id": coordinator_id, "updated_at": now})
-            .eq("event_id", event_id)
-            .eq("status", "requested")
-            .is_("coordinator_id", "null")
+        assigned = (
+            client.rpc(
+                "assign_unassigned_event",
+                {
+                    "p_event_id": event_id,
+                    "p_coordinator_id": coordinator_id,
+                },
+            )
             .execute()
             .data
-            or []
         )
-        if not update:
+        if not assigned:
             raise CoordinatorLeadAssignmentError(
                 "The request changed or was assigned by another Lead. Reload it before retrying.",
                 409,
             )
-
-        event_name = event.get("name") or "Untitled event"
-        notifications = [
-            {
-                "event_id": event_id,
-                "recipient_id": coordinator_id,
-                "type": "coordinator_assigned",
-                "message": f"You have been assigned to {event_name}.",
-                "created_at": now,
-            },
-            {
-                "event_id": event_id,
-                "recipient_id": event.get("organiser_id"),
-                "type": "coordinator_assigned",
-                "message": f"An Event Coordinator has been assigned to {event_name}.",
-                "created_at": now,
-            },
-        ]
-        saved = client.table("notification").insert(notifications).execute().data
-        if not saved:
-            raise CoordinatorLeadAssignmentError(
-                "The event was assigned, but notifications could not be created.", 502
-            )
-
-        profile_rows = (
-            client.table("profile")
-            .select("name")
-            .eq("user_id", coordinator_id)
-            .limit(1)
-            .execute()
-            .data
-            or []
-        )
     except CoordinatorLeadAssignmentError:
         raise
     except Exception as exc:
+        message = str(exc).lower()
+        if "no longer available for assignment" in message:
+            raise CoordinatorLeadAssignmentError(
+                "The request changed or was assigned by another Lead. Reload it before retrying.",
+                409,
+            ) from exc
+        if "not an active event coordinator" in message:
+            raise CoordinatorLeadAssignmentError(
+                "The selected Event Coordinator is not active."
+            ) from exc
         raise CoordinatorLeadAssignmentError(
             "Unable to assign the event request.", 502
         ) from exc
 
-    assigned = update[0]
-    assigned["coordinator_name"] = (
-        profile_rows[0].get("name") if profile_rows else None
-    )
-    assigned["assigned_by"] = lead_id
+    if isinstance(assigned, list):
+        assigned = assigned[0]
+    assigned["coordinator_name"] = assigned.get("coordinator_name") or profile_rows[
+        0
+    ].get("name")
+    assigned["assigned_by"] = assigned.get("assigned_by") or lead_id
     return assigned
 
 
