@@ -57,9 +57,9 @@ Event Coordinator Lead so that I can identify missing or unclear requirements.
 - The assignment and read/write permissions must prevent a coordinator from
   treating an unassigned event or another coordinator's event as their own.
 - Organiser ownership continues to use `event.organiser_id`.
-- The current repository checkout does not contain the IDE-referenced Lead-role
-  migration, so its schema and RLS details must be verified during the
-  implementation-readiness audit before runtime implementation.
+- The Event Coordinator Lead implementation exists on its dedicated feature
+  branches and must be integrated before this story is deployed. Its migrations
+  and RLS must be verified as part of that shared integration.
 
 ## Test Case Reference
 
@@ -85,8 +85,8 @@ Event Coordinator Lead so that I can identify missing or unclear requirements.
   these writes are not an atomic database transaction.
 - Preserve the existing coordinator-review implementation that authorises
   access by matching the authenticated coordinator to `event.coordinator_id`.
-  The implementation-readiness audit must confirm that the approved Lead
-  workflow and RLS control assignment writes to that field.
+  The approved Lead workflow and RLS own assignment writes to that field; this
+  review story must not duplicate that shared assignment implementation.
 
 ## Requirement Revision
 

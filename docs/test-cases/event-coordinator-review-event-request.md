@@ -68,6 +68,7 @@
 - The Event Coordinator Lead assignment workflow must set the existing
   `event.coordinator_id`, and the shared RLS/permission design must restrict
   assignment writes so coordinators cannot assign requests to themselves.
-- The Lead-role migration referenced by the developer must be present and
-  verified during implementation readiness; it is not available in the current
-  repository checkout.
+- The dedicated Event Coordinator Lead implementation and migrations must be
+  integrated and verified before deployment. This review story consumes the
+  resulting `event.coordinator_id` assignment and does not duplicate the Lead
+  assignment workflow.

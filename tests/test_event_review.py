@@ -46,6 +46,44 @@ def test_listing_only_selects_assigned_events(database):
     tables['event'].select.return_value.eq.assert_called_once_with('coordinator_id', 'coord')
 
 
+def test_lead_assigned_coordinator_can_read_review_details(database):
+    _, tables, event = database
+    history = [{'action_type': 'clarification_requested', 'details': 'Clarify setup.'}]
+    equipment = [{'equipment': {'name': 'Projector'}, 'quantity_requested': 1}]
+    tables['event_action_log'].select.return_value.eq.return_value.order.return_value.execute.return_value.data = history
+    tables['equipment_reservation'].select.return_value.eq.return_value.execute.return_value.data = equipment
+
+    assert get_review('token', 'evt') == {
+        'event': event, 'actions': history, 'equipment': equipment,
+    }
+
+
+@pytest.mark.parametrize('coordinator_id', [None, 'other'])
+def test_unassigned_or_other_coordinator_event_cannot_be_read(database, coordinator_id):
+    _, tables, event = database
+    event['coordinator_id'] = coordinator_id
+
+    with pytest.raises(ReviewError) as error:
+        get_review('token', 'evt')
+
+    assert error.value.status == 403
+    tables['event_action_log'].select.assert_not_called()
+    tables['equipment_reservation'].select.assert_not_called()
+
+
+@pytest.mark.parametrize('coordinator_id', [None, 'other'])
+def test_unassigned_or_other_coordinator_event_cannot_be_reviewed(database, coordinator_id):
+    _, tables, event = database
+    event['coordinator_id'] = coordinator_id
+
+    with pytest.raises(ReviewError) as error:
+        submit_review('token', 'evt', {'status': 'planning'})
+
+    assert error.value.status == 403
+    tables['event'].update.assert_not_called()
+    tables['event_action_log'].insert.assert_not_called()
+
+
 def test_organiser_can_read_message_history_and_equipment(database):
     client, tables, event = database
     client.auth.get_user.return_value.user.id = 'org'
