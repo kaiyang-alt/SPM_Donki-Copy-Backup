@@ -60,7 +60,9 @@ function fixture(free = 1, acceptError = null, options = {}) {
       if (url.endsWith('/agree')) return options.agreeError
         ? {ok: false, json: async () => ({error: options.agreeError})}
         : {ok: true, json: async () => ({...item, reservation: {...row, organiser_agreed_version: row.proposal_version, organiser_agreed_by: 'owner', organiser_agreed_at: '2026-11-19T09:00:00Z'}})};
-      if (url.endsWith('/availability')) return {ok: true, json: async () => ({...item, available_quantity: free, sufficient_stock: free >= 1})};
+      if (url.endsWith('/availability')) return options.availabilityError
+        ? {ok: false, json: async () => ({error: options.availabilityError})}
+        : {ok: true, json: async () => ({...item, available_quantity: free, sufficient_stock: free >= 1})};
       if (url.endsWith('/accept')) return acceptError
         ? {ok: false, json: async () => ({error: acceptError})}
         : {ok: true, json: async () => ({...item, reservation: {...row, status: 'reserved', decided_by: 'tss'}})};
@@ -109,6 +111,16 @@ test('insufficient stock disables final acceptance and explains the quantity', a
   assert.match(f.context.html, /insufficient stock/);
   assert.match(f.context.html, /data-equipment-accept="request-1" disabled/);
   assert.equal(f.calls.filter(call => call.url.endsWith('/accept')).length, 0);
+});
+
+test('availability errors appear beside the review actions instead of as a detached page error', async () => {
+  const message = 'The proposal period must match the confirmed venue booking.';
+  const f = fixture(1, null, {availabilityError: message});
+  f.context.renderPage(); await tick(); await f.check.onclick();
+  assert.match(f.context.html, /availability-error/);
+  assert.match(f.context.html, /Availability check could not be completed/);
+  assert.match(f.context.html, new RegExp(message.replaceAll('.', '\\.')));
+  assert.match(f.context.html, /data-equipment-accept="request-1" disabled/);
 });
 
 test('RPC conflicts remain visible without an optimistic reserved status', async () => {
