@@ -16,7 +16,7 @@ function fixture(free = 1, acceptError = null, options = {}) {
     venue_booking: [{booking_id: 'booking-1', venue_id: 'venue-1', status: 'confirmed',
       requested_start: row.start_datetime, requested_end: row.end_datetime,
       venue: {name: 'Seminar Room', location: 'Building A'}}]},
-    equipment: {name: 'Projector', type: 'Projector'}};
+    equipment: {equipment_id: 'eq-1', name: 'Projector', type: 'Projector', total_quantity: 1, active: true, operational_status: 'available'}};
   const calls = [], elements = new Map();
   const escape = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
   const context = {
@@ -47,7 +47,12 @@ function fixture(free = 1, acceptError = null, options = {}) {
     authenticatedFetch: async (url, requestOptions) => {
       calls.push({url, options: requestOptions});
       if (options.fetch) return options.fetch(url, requestOptions, item);
-      if (url.endsWith('/context')) return {ok: true, json: async () => ({events: options.orphan ? [item.event] : [], equipment: [{equipment_id: 'eq-1', name: 'Projector', type: 'Projector'}]})};
+      if (url.endsWith('/context')) return {ok: true, json: async () => ({events: options.orphan ? [item.event] : [], equipment: [{equipment_id: 'eq-1', name: 'Projector', type: 'Projector', total_quantity: 1, active: true, operational_status: 'available'}]})};
+      if (url.endsWith('/catalogue')) return {ok: true, json: async () => ({equipment: [{equipment_id: 'eq-1', name: 'Projector', type: 'Projector', total_quantity: 1, active: true, operational_status: options.operationalStatus || 'available'}]})};
+      if (url.includes('/catalogue/eq-1/operational-status')) {
+        const payload = JSON.parse(requestOptions.body);
+        return {ok: true, json: async () => ({equipment_id: 'eq-1', name: 'Projector', type: 'Projector', total_quantity: 1, active: true, operational_status: payload.operational_status})};
+      }
       if (url.endsWith('/proposals')) {
         const payload = JSON.parse(requestOptions.body);
         return {ok: true, json: async () => ({...item, reservation: {...row, quantity_suggested: payload.quantity_suggested, proposal_version: 2, organiser_agreed_version: null, organiser_agreed_by: null, organiser_agreed_at: null}})};
@@ -157,6 +162,26 @@ test('empty dashboards explain how organiser requests reach the inbox', async ()
   assert.match(f.context.html, /No equipment requests/);
   assert.match(f.context.html, /After Coordinator approval/);
   assert.equal(f.open, undefined);
+});
+
+test('equipment page displays and saves all approved operational statuses', async () => {
+  const f = fixture(1, null, {page: 'equipment'});
+  f.context.renderPage(); await tick();
+  assert.match(f.context.html, /Equipment operational status/);
+  assert.match(f.context.html, /Available/);
+  assert.match(f.context.html, /Damaged/);
+  assert.match(f.context.html, /Under Repair/);
+  assert.match(f.context.html, /Unavailable/);
+  assert.match(f.context.html, /value="available" selected/);
+  const form = f.context.document.querySelectorAll('[data-equipment-status-form]')[0];
+  form.elements = {operational_status: {value: 'damaged'}};
+  form.onsubmit({preventDefault() {}}); await tick();
+  const call = f.calls.find(entry => entry.url.includes('/catalogue/eq-1/operational-status'));
+  assert.equal(call.options.method, 'PATCH');
+  assert.deepEqual(JSON.parse(call.options.body), {operational_status: 'damaged'});
+  assert.match(f.context.html, /Projector is now Damaged/);
+  assert.match(f.context.html, /value="damaged" selected/);
+  assert.equal(f.context.document.querySelectorAll('[data-equipment-proposal]').length, 0);
 });
 
 test('load errors remain visible and do not fabricate dashboard cards', async () => {
