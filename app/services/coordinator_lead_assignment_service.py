@@ -116,6 +116,53 @@ def get_current_assignments(access_token):
     return {"events": events, "active_statuses": list(ACTIVE_EVENT_STATUSES)}
 
 
+def get_assigned_event_details(access_token, event_id):
+    client, _ = _lead_session(access_token)
+    try:
+        events = (
+            client.table("event")
+            .select(
+                "event_id,name,purpose,description,status,organiser_id,"
+                "preferred_start_datetime,preferred_end_datetime,"
+                "start_datetime,end_datetime,expected_attendance,"
+                "venue_requirements,accessibility_needs,layout_requirements,"
+                "technical_support_required,technical_requirements,"
+                "coordinator_id"
+            )
+            .eq("event_id", event_id)
+            .in_("status", list(ACTIVE_EVENT_STATUSES))
+            .not_.is_("coordinator_id", "null")
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        if not events:
+            raise CoordinatorLeadAssignmentError(
+                "Assigned active event not found.", 404
+            )
+        event = events[0]
+        profiles = (
+            client.table("profile")
+            .select("name")
+            .eq("user_id", event.get("coordinator_id"))
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except CoordinatorLeadAssignmentError:
+        raise
+    except Exception as exc:
+        raise CoordinatorLeadAssignmentError(
+            "Unable to load the current event assignment.", 502
+        ) from exc
+
+    event["coordinator_name"] = profiles[0].get("name") if profiles else None
+    event["assigned"] = True
+    return event
+
+
 def assign_event(access_token, event_id, coordinator_id):
     client, lead_id = _lead_session(access_token)
     coordinator_id = str(coordinator_id or "").strip()

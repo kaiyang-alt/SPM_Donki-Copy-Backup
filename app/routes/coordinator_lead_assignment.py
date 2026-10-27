@@ -3,6 +3,7 @@ from flask import Blueprint, jsonify, request
 from app.services.coordinator_lead_assignment_service import (
     CoordinatorLeadAssignmentError,
     assign_event,
+    get_assigned_event_details,
     get_assignment_context,
     get_current_assignments,
     get_reassignment_context,
@@ -45,6 +46,13 @@ def reassignment_context():
 @coordinator_lead_assignment_blueprint.get("/current-assignments")
 def current_assignments():
     return _error_response(get_current_assignments)
+
+
+@coordinator_lead_assignment_blueprint.get("/events/<event_id>/assignment-details")
+def assigned_event_details(event_id):
+    return _error_response(
+        lambda token: {"event": get_assigned_event_details(token, event_id)}
+    )
 
 
 @coordinator_lead_assignment_blueprint.post("/events/<event_id>/assign")

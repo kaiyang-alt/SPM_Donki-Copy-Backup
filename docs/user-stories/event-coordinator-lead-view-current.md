@@ -6,10 +6,13 @@ As an Event Coordinator Lead, I want to view current Event Coordinator assignmen
 
 ## Acceptance Criteria
 
-- AC1: The Event Coordinator Lead can view events with their currently assigned Event Coordinator.
-- AC2: The Event Coordinator Lead can view active events under their supervision.
-- AC3: The Event Coordinator Lead can identify event requests that remain unassigned.
-- AC4: The Event Coordinator Lead can view basic event information associated with each assignment.
+- AC1: The Event Coordinator Lead can view active events with their currently assigned Event Coordinator.
+- AC2: The Event Coordinator Lead can identify submitted events that remain unassigned.
+- AC3: The Event Coordinator Lead can view basic event information associated with each assignment.
+- AC4: Assigned events are clearly distinguished from unassigned event requests.
+- AC5: The Event Coordinator Lead can open an assigned event and view its current Coordinator assignment.
+- AC6: Assignment information refreshes after assignment or reassignment is completed.
+- AC7: Only an authenticated Event Coordinator Lead can access the assignment overview and assigned-event details.
 
 ## Relevant Customer Clarifications
 
@@ -17,6 +20,7 @@ As an Event Coordinator Lead, I want to view current Event Coordinator assignmen
 - Active events use the existing `requested`, `changes_requested`, `planning`, and `confirmed` statuses.
 - Basic event information includes the event ID, name, status, preferred or confirmed dates, and current Event Coordinator.
 - The current schema has no Lead-to-event relationship, so every active event is under the supervision of an authenticated Event Coordinator Lead.
+- Until a narrower supervision relationship is confirmed and added to the schema, the overview must not invent one and therefore shows all active events.
 
 ## Preconditions / Dependencies
 
@@ -40,4 +44,5 @@ No story-specific UML is currently documented.
 
 - Use existing event and profile information; do not introduce duplicate assignment storage.
 - Use the confirmed active-event statuses, supervision scope, and basic information fields documented above.
+- Assigned-event details are available only for active events that currently have a Coordinator.
 - Follow the shared `route -> service/business logic -> Supabase` flow.

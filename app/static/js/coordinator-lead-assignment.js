@@ -3,6 +3,7 @@ let lastCoordinatorLeadAssignment=null;
 let coordinatorLeadReassignmentContext={events:[],coordinators:[]};
 let lastCoordinatorLeadReassignment=null;
 let coordinatorLeadCurrentAssignments=[];
+let coordinatorLeadAssignmentDetails=null;
 
 pages.lead={dashboard:coordinatorLeadAssignmentPage,current:coordinatorLeadCurrentAssignmentsPage};
 
@@ -21,6 +22,10 @@ async function loadCoordinatorLeadAssignmentContext(){
   coordinatorLeadAssignmentContext={events:assignmentData.events||[],coordinators:assignmentData.coordinators||[]};
   coordinatorLeadReassignmentContext={events:reassignmentData.events||[],coordinators:reassignmentData.coordinators||[]};
   coordinatorLeadCurrentAssignments=currentData.events||[];
+  if(coordinatorLeadAssignmentDetails){
+    const refreshed=coordinatorLeadCurrentAssignments.find(event=>event.event_id===coordinatorLeadAssignmentDetails.event_id&&event.assigned);
+    coordinatorLeadAssignmentDetails=refreshed?{...coordinatorLeadAssignmentDetails,...refreshed}:null;
+  }
 }
 
 function coordinatorLeadCurrentAssignmentsPage(){
@@ -29,8 +34,19 @@ function coordinatorLeadCurrentAssignmentsPage(){
   const assignedContent=assigned.length?assigned.map(coordinatorLeadCurrentAssignmentRow).join(''):'<div class="empty-state"><h3>No active assigned events</h3><p class="muted">There are no active events with a current Event Coordinator.</p></div>';
   const unassignedContent=unassigned.length?unassigned.map(coordinatorLeadCurrentAssignmentRow).join(''):'<div class="empty-state"><h3>No active unassigned requests</h3><p class="muted">All active event requests currently have an Event Coordinator.</p></div>';
   return pageHead('Current Event Coordinator assignments','Oversee active events and identify requests that still need an owner.',`<div class="actions"><button class="btn btn-soft" type="button" onclick="refreshCoordinatorLeadAssignments()">Refresh</button></div>`)+
+    coordinatorLeadAssignmentDetailsPanel()+
     `<section class="panel" style="margin-bottom:20px"><div class="panel-head"><h2>Assigned active events</h2></div>${assignedContent}</section>`+
     `<section class="panel"><div class="panel-head"><h2>Unassigned active requests</h2></div>${unassignedContent}</section>`;
+}
+
+function coordinatorLeadAssignmentDetailsPanel(){
+  const event=coordinatorLeadAssignmentDetails;
+  if(!event)return '';
+  const detail=(label,value)=>`<div class="equipment"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value??'Not provided')}</strong></div>`;
+  const start=event.start_datetime||event.preferred_start_datetime;
+  const end=event.end_datetime||event.preferred_end_datetime;
+  const technicalSupport=event.technical_support_required===true?'Required':event.technical_support_required===false?'Not required':'Not provided';
+  return `<section class="panel" style="margin-bottom:20px"><div class="panel-head"><div><div class="eyebrow">Current assignment</div><h2>${escapeHtml(event.name||'Untitled event')}</h2></div><button class="btn btn-soft btn-small" type="button" onclick="closeCoordinatorLeadAssignmentDetails()">Close</button></div><span class="status ready">Coordinator: ${escapeHtml(event.coordinator_name||'Name unavailable')}</span>${detail('Event ID',event.event_id)}${detail('Status',event.status)}${detail('Purpose',event.purpose)}${detail('Description',event.description)}${detail('Start',start?new Date(start).toLocaleString():'Not provided')}${detail('End',end?new Date(end).toLocaleString():'Not provided')}${detail('Expected attendance',event.expected_attendance)}${detail('Venue requirements',event.venue_requirements)}${detail('Accessibility needs',event.accessibility_needs)}${detail('Layout requirements',event.layout_requirements)}${detail('Technical support',technicalSupport)}${detail('Technical requirements',event.technical_requirements)}</section>`;
 }
 
 function coordinatorLeadCurrentAssignmentRow(event){
@@ -38,7 +54,8 @@ function coordinatorLeadCurrentAssignmentRow(event){
   const end=event.end_datetime||event.preferred_end_datetime;
   const period=start?`${new Date(start).toLocaleString()}${end?` to ${new Date(end).toLocaleString()}`:''}`:'Date not provided';
   const owner=event.assigned?`Coordinator: ${escapeHtml(event.coordinator_name||'Name unavailable')}`:'Unassigned';
-  return `<div class="list-row"><div class="date-tile">?</div><div><h4>${escapeHtml(event.name||'Untitled event')}</h4><div class="muted">${escapeHtml(event.event_id)} · ${escapeHtml(period)} · ${escapeHtml(event.status)}</div></div><span class="status ${event.assigned?'ready':'pending'}">${owner}</span></div>`;
+  const action=event.assigned?`<button class="btn btn-soft btn-small" type="button" onclick="openCoordinatorLeadAssignmentDetails('${escapeAttribute(event.event_id)}')">Open assignment</button>`:'';
+  return `<div class="list-row"><div class="date-tile">?</div><div><h4>${escapeHtml(event.name||'Untitled event')}</h4><div class="muted">${escapeHtml(event.event_id)} · ${escapeHtml(period)} · ${escapeHtml(event.status)}</div></div><div class="event-actions"><span class="status ${event.assigned?'ready':'pending'}">${owner}</span>${action}</div></div>`;
 }
 
 function coordinatorLeadAssignmentPage(){
@@ -74,6 +91,21 @@ function coordinatorLeadReassignmentRow(event){
 
 async function refreshCoordinatorLeadAssignments(){
   try{await loadCoordinatorLeadAssignmentContext();renderPage()}catch(error){toast(error.message)}
+}
+
+async function openCoordinatorLeadAssignmentDetails(eventId){
+  try{
+    const response=await authenticatedFetch(`/api/coordinator-lead/events/${encodeURIComponent(eventId)}/assignment-details`);
+    const data=await response.json();
+    if(!response.ok)throw new Error(data.error||'Unable to open the current assignment.');
+    coordinatorLeadAssignmentDetails=data.event;
+    renderPage();
+  }catch(error){toast(error.message)}
+}
+
+function closeCoordinatorLeadAssignmentDetails(){
+  coordinatorLeadAssignmentDetails=null;
+  renderPage();
 }
 
 document.getElementById('mainContent').addEventListener('submit',async event=>{
