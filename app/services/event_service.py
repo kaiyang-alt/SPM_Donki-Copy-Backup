@@ -95,13 +95,12 @@ def get_event_details_for_organiser(event_id: str, organiser_id: str):
 
     # Check Venue Bookings
     venue_bookings = event.get("venue_booking", [])
-    if not any(booking.get("status") == "confirmed" for booking in venue_bookings):
-        for booking in venue_bookings:
-            status = booking.get("status")
-            if status in ["requested", "tentative"]:
-                outstanding_arrangements.append(f"Venue Booking: Pending Approval ({status})")
-            elif status in ["rejected", "cancelled"]:
-                outstanding_arrangements.append(f"Venue Booking: Unfulfilled ({status})")
+    for booking in venue_bookings:
+        status = booking.get("status")
+        if status in ["requested", "tentative"]:
+            outstanding_arrangements.append(f"Venue Booking: Pending Approval ({status})")
+        elif status in ["rejected", "cancelled"]:
+            outstanding_arrangements.append(f"Venue Booking: Unfulfilled ({status})")
 
     if not venue_bookings:
         outstanding_arrangements.append("Venue Booking: No booking requested yet")
