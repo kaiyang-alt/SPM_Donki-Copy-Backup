@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify, current_app, g
 from werkzeug.exceptions import HTTPException
-from postgrest.exceptions import APIError
 from app.services.venue_booking_service import (
     VenueBookingError,
     validate_booking_payload,
@@ -16,7 +15,6 @@ from app.services.venue_booking_service import (
     update_venue_details,
     get_venue_schedule
 )
-from app.services.venue_booking_service import database_error
 
 venue_booking_bp = Blueprint('venue_booking', __name__)
 
@@ -38,8 +36,6 @@ def handle_booking_error(error):
 def handle_database_error(error):
     if isinstance(error, HTTPException):
         return jsonify(success=False, error=error.description), error.code
-    if isinstance(error, APIError):
-        return handle_booking_error(database_error(error))
     # Honour existing database uniqueness/exclusion constraints if configured.
     if getattr(error, 'code', None) in ('23505', '23P01'):
         return jsonify(success=False, error='The venue arrangement conflicts with an existing record.'), 409

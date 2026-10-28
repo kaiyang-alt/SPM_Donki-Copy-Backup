@@ -28,10 +28,6 @@ def _client(venues, bookings=None, blocks=None):
         query.lt.return_value = query
         query.gt.return_value = query
         query.execute.return_value.data = rows
-    unavailable = {row['venue_id'] for row in (bookings or []) + (blocks or [])}
-    client.rpc.side_effect = lambda name, params: SimpleNamespace(
-        execute=lambda: SimpleNamespace(data=params['p_venue_id'] not in unavailable)
-    )
     return client, tables
 
 
@@ -55,14 +51,14 @@ def test_search_matches_every_requirement_and_excludes_conflicts(create_client):
     assert [venue['venue_id'] for venue in results] == ['alcove']
     assert results[0]['layout_capacity'] == 180
     assert results[0]['available_start'] == CRITERIA['start']
-    assert [call.args[1]['p_venue_id'] for call in client.rpc.call_args_list] == ['alcove', 'booked', 'blocked']
-    for call in client.rpc.call_args_list:
-        assert call.args == ('cs_venue_period_available', {
-            'p_venue_id': call.args[1]['p_venue_id'],
-            'p_start': CRITERIA['start'], 'p_end': CRITERIA['end'],
-        })
-    tables['venue_booking'].select.assert_not_called()
-    tables['venue_block'].select.assert_not_called()
+    booking_query = tables['venue_booking'].select.return_value
+    booking_query.eq.assert_called_once_with('status', 'confirmed')
+    booking_query.lt.assert_called_once_with('requested_start', CRITERIA['end'])
+    booking_query.gt.assert_called_once_with('requested_end', CRITERIA['start'])
+    block_query = tables['venue_block'].select.return_value
+    block_query.eq.assert_called_once_with('status', 'active')
+    block_query.lt.assert_called_once_with('start_datetime', CRITERIA['end'])
+    block_query.gt.assert_called_once_with('end_datetime', CRITERIA['start'])
 
 
 def test_layout_capacity_supports_approved_json_column_shapes():

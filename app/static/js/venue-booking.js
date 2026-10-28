@@ -41,8 +41,7 @@ function bookingDisplayStatus(status) {
     requested: 'Pending Venue Approval',
     tentative: 'Pending Venue Approval',
     confirmed: 'Confirmed',
-    rejected: 'Rejected',
-    cancelled: 'Cancelled'
+    rejected: 'Rejected'
   };
   return labels[status] || status;
 }
@@ -77,9 +76,6 @@ function coordinatorBookingRows() {
           <div class="muted">
             ${escapeHtml(venue.name || booking.venue_id)}
             · ${escapeHtml(formatDateTime(booking.requested_start))}
-            – ${escapeHtml(formatDateTime(booking.requested_end))}
-            <br>Layout: ${escapeHtml(booking.setup_layout || 'Not recorded; review required')}
-            ${['requested', 'tentative'].includes(booking.status) ? '<br>Pending alternative — does not reserve this venue.' : ''}
           </div>
         </div>
         <span class="status ${bookingStatusClass(booking.status)}">
@@ -106,7 +102,7 @@ function layoutOptions() {
 function venueBookingPage() {
   const heading = pageHead(
     'Venue booking',
-    'Submit non-blocking alternatives. Venue Staff confirms one and the remaining pending alternatives are cancelled.'
+    'Check availability and submit a formal venue request.'
   );
   const eventOptions = bookingContext.events.map(event => `
     <option
@@ -231,11 +227,6 @@ async function submitVenueBooking() {
     error.textContent = 'Select an available venue.';
     return;
   }
-  const currentDraft = readBookingForm();
-  if (!bookingDraft || Object.keys(currentDraft).some(key => currentDraft[key] !== bookingDraft[key])) {
-    error.textContent = 'Check availability again after changing the event, period or layout.';
-    return;
-  }
 
   error.textContent = '';
   try {
@@ -299,8 +290,7 @@ function venueRequestRows() {
           ${escapeHtml(venue.name || booking.venue_id)}
           · ${escapeHtml(formatDateTime(booking.requested_start))}
           –${escapeHtml(formatDateTime(booking.requested_end))}
-          <br>Layout: ${escapeHtml(booking.setup_layout || 'Not recorded; review required')}
-          ${isPending ? '<br>Non-blocking alternative; confirmation reserves the venue.' : ''}
+          <br>Layout: ${escapeHtml(event.layout_requirements || 'Not specified')}
           ${decision}
         </div>
       </div>
@@ -331,7 +321,7 @@ async function decideVenueBooking(bookingId, action, payload) {
   toast(
     data.warning
       ? `Booking ${pastTense}; notification unavailable.`
-      : action === 'approve' ? 'Venue confirmed; remaining pending alternatives cancelled.' : `Booking ${pastTense}.`
+      : `Booking ${pastTense}.`
   );
 }
 
@@ -379,11 +369,10 @@ function scheduleRows() {
     <div class="list-row">
       <div class="date-tile">⌖</div>
       <div>
-        <h4>${escapeHtml(bookingDisplayStatus(item.status) || 'Venue block')}</h4>
+        <h4>${escapeHtml(item.status || 'Venue block')}</h4>
         <div class="muted">
           ${escapeHtml(formatDateTime(item.requested_start || item.start_datetime))}
           –${escapeHtml(formatDateTime(item.requested_end || item.end_datetime))}
-          ${['requested', 'tentative'].includes(item.status) ? '<br>Non-blocking alternative' : ''}
         </div>
       </div>
     </div>

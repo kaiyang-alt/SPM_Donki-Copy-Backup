@@ -17,10 +17,6 @@ function fixture(free = 1, acceptError = null, options = {}) {
       requested_start: row.start_datetime, requested_end: row.end_datetime,
       venue: {name: 'Seminar Room', location: 'Building A'}}]},
     equipment: {name: 'Projector', type: 'Projector'}};
-  if (options.pendingVenueAlternative) item.event.venue_booking.push({
-    booking_id: 'alternative', venue_id: 'venue-2', status: 'requested',
-    requested_start: '2026-11-21T01:00:00Z', requested_end: '2026-11-21T04:00:00Z'
-  });
   const calls = [], elements = new Map();
   const escape = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
   const context = {
@@ -254,15 +250,6 @@ test('staff can save an offered quantity without replacing the original requeste
   assert.equal(payload.start_datetime, '2026-11-20T09:00+08:00');
   assert.match(f.context.html, /Awaiting organiser agreement/);
   assert.equal(f.accept.disabled, true);
-});
-
-test('equipment proposal uses the confirmed venue period despite pending alternatives', async () => {
-  const f = fixture(1, null, {page: 'dashboard', orphan: true, pendingVenueAlternative: true});
-  f.context.renderPage(); await tick();
-  f.context.document.querySelectorAll('[data-equipment-event]')[0].onclick();
-  assert.match(f.context.html, /name="start_datetime"[^>]*value="2026-11-20T09:00"/);
-  assert.match(f.context.html, /name="end_datetime"[^>]*value="2026-11-20T12:00"/);
-  assert.doesNotMatch(f.context.html, /value="2026-11-21T09:00"/);
 });
 
 test('staff acceptance remains disabled until the current proposal is agreed', async () => {
