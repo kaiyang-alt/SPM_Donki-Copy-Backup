@@ -83,8 +83,8 @@
   function proposalForm(event, row = null) {
     if (!['planning', 'confirmed'].includes(event.status)) return '<p class="notice">Submitted requirements received. Equipment proposals can be saved after Coordinator review moves the event to planning.</p>';
     if (!catalogue.length) return '<p class="muted">Refresh to load the active equipment catalogue before making a proposal.</p>';
-    const activeBookings = (event.venue_booking || []).filter(b => ['requested', 'tentative', 'confirmed'].includes(b.status));
-    const booking = activeBookings.length === 1 && activeBookings[0].status === 'confirmed' ? activeBookings[0] : null;
+    const confirmedBookings = (event.venue_booking || []).filter(b => b.status === 'confirmed');
+    const booking = confirmedBookings.length === 1 ? confirmedBookings[0] : null;
     const start = row?.start_datetime || booking?.requested_start || event.start_datetime || event.preferred_start_datetime;
     const end = row?.end_datetime || booking?.requested_end || event.end_datetime || event.preferred_end_datetime;
     const items = row ? catalogue.filter(e => e.equipment_id === row.equipment_id) : catalogue.filter(e => !(rows || []).some(item => item.reservation.event_id === event.event_id && item.reservation.equipment_id === e.equipment_id));
