@@ -81,7 +81,10 @@ document.querySelector('#roleSelect option[value="coordinator"]').textContent = 
 const baselineOpenManagedEvent = openManagedEvent;
 openManagedEvent = function(index) {
   const event = authorisedEvents[index];
-  if (event?.status === 'changes_requested') { openReview(eventIdentifier(event)); return; }
+  if (['changes_requested', 'approved', 'rejected'].includes(event?.status)) {
+    openReview(eventIdentifier(event));
+    return;
+  }
   baselineOpenManagedEvent(index);
 };
 

@@ -20,6 +20,9 @@ def test_home_page():
     assert b'Attendee (Demo)' in response.data
     assert b"js/venue-search.js" in response.data
     assert b"js/event-review.js" in response.data
+    assert response.data.index(b"js/event-assignment.js") < response.data.index(
+        b"js/event-review.js"
+    )
     assert b"js/coordinator-lead-assignment.js" in response.data
     assert b"js/equipment-reservations.js" in response.data
 

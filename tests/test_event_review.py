@@ -119,6 +119,11 @@ def test_review_interface_has_distinct_approve_and_reject_controls():
     assert 'data-review-decision="rejected">Reject</button>' in source
 
 
+def test_organiser_can_open_terminal_review_outcomes_with_decision_history():
+    source = Path('app/static/js/event-review.js').read_text(encoding='utf-8')
+    assert "['changes_requested', 'approved', 'rejected'].includes(event?.status)" in source
+
+
 @pytest.mark.parametrize('failure', ['assignment', 'role', 'state', 'message', 'status'])
 def test_prohibited_review_never_writes(database, failure):
     _, tables, event = database
