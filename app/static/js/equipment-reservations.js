@@ -3,8 +3,8 @@
   const API = '/api/equipment-requests';
   const reviewPages = new Set(['dashboard', 'assignments', 'equipment', 'equipmentdetails', 'equipmentevent']);
   let sessionToken = null, epoch = 0, rows = null, selected = null, detail = null;
-  let events = [], catalogue = [], selectedEvent = null;
-  let checks = {}, error = '', confirmation = null, busy = false;
+  let events = [], catalogue = [], catalogueItems = [], selectedEvent = null;
+  let checks = {}, error = '', notice = '', confirmation = null, busy = false;
   const visible = () => currentRole === 'technical' && reviewPages.has(currentPage) && document.getElementById('equipmentReview');
   const current = generation => generation === epoch && sessionToken === authSession?.access_token;
   const period = row => [row.start_datetime, row.end_datetime].map(value => {
@@ -19,8 +19,8 @@
   function resetSession() {
     if (sessionToken !== authSession?.access_token) {
       sessionToken = authSession?.access_token; epoch++;
-      rows = null; selected = null; detail = null; checks = {}; events = []; catalogue = []; selectedEvent = null;
-      error = ''; confirmation = null; busy = false;
+      rows = null; selected = null; detail = null; checks = {}; events = []; catalogue = []; catalogueItems = []; selectedEvent = null;
+      error = ''; notice = ''; confirmation = null; busy = false;
     }
   }
 
@@ -51,13 +51,26 @@
     const r = item.reservation, id = r.reservation_id, check = checks[id];
     const agreed = r.proposal_version > 0 && r.organiser_agreed_version === r.proposal_version && r.organiser_agreed_by && r.organiser_agreed_at;
     const eligible = r.status === 'requested' && ['planning', 'confirmed'].includes(item.event.status);
-    return `<section class="panel" style="margin-bottom:20px">${details(item)}` +
-      field('Request status', r.status) +
-      (eligible ? proposalForm(item.event, r) + field('Organiser agreement', agreed ? 'Agreed to current proposal' : 'Awaiting organiser agreement') : '') +
-      `<p class="muted">${check ? `Available quantity: ${escapeHtml(check.available_quantity)}${check.sufficient_stock ? '' : ' — insufficient stock for this request.'}` : 'Check stock before acceptance. Earlier requests retain priority.'}</p>` +
-      (eligible ? `<div class="form-actions"><button class="btn btn-soft" data-equipment-check="${escapeAttribute(id)}" ${busy || !r.quantity_suggested ? 'disabled' : ''}>Check availability</button>` +
-        `<button class="btn btn-primary" data-equipment-accept="${escapeAttribute(id)}" ${busy || !agreed || !check?.sufficient_stock ? 'disabled' : ''}>Accept reviewed request</button></div>` :
-        `<p class="muted">${r.status === 'reserved' ? 'Reservation saved.' : 'Event is not eligible for acceptance.'}</p>`) + '</section>';
+    const availability = !check
+      ? {kind: 'neutral', title: 'Availability not checked', text: 'Check current stock and scheduling before acceptance. Earlier requests retain priority.'}
+      : check.error
+        ? {kind: 'error', title: 'Availability check could not be completed', text: check.error}
+        : check.sufficient_stock
+          ? {kind: 'success', title: `${check.available_quantity} available`, text: `Enough stock is available for the suggested quantity of ${r.quantity_suggested}.`}
+          : {kind: 'warning', title: 'Not enough equipment available', text: `Available quantity: ${check.available_quantity} — insufficient stock for this request.`};
+    return `<section class="panel equipment-review-card" style="margin-bottom:20px">` +
+      `<div class="panel-head equipment-review-head"><div><p class="equipment-kicker">Equipment request</p><h2>${escapeHtml(item.event.name || r.event_id)}</h2></div>` +
+      `<span class="status ${r.status === 'reserved' ? 'confirmed' : 'pending'}">${escapeHtml(r.status)}</span></div>` +
+      `<div class="equipment-summary-grid">${field('Equipment', item.equipment.name || r.equipment_id)}` +
+      field('Type', item.equipment.type) + field('Suggested quantity', r.quantity_suggested ?? 'Not proposed') +
+      field('Request status', r.status) + `</div><p class="equipment-period">${escapeHtml(period(r))}</p>` +
+      (eligible ? `<div class="equipment-review-section">${proposalForm(item.event, r)}</div>` +
+        `<div class="equipment-review-section equipment-decision"><div class="equipment-agreement"><span>Organiser agreement</span><strong>${agreed ? 'Agreed to current proposal' : 'Awaiting organiser agreement'}</strong></div>` +
+        `<div class="availability-state availability-${availability.kind}" role="${availability.kind === 'error' ? 'alert' : 'status'}"><div class="availability-icon" aria-hidden="true">${availability.kind === 'success' ? '✓' : availability.kind === 'warning' || availability.kind === 'error' ? '!' : '○'}</div>` +
+        `<div><strong>${escapeHtml(availability.title)}</strong><p>${escapeHtml(availability.text)}</p></div></div>` +
+        `<div class="equipment-actions"><button class="btn btn-soft" data-equipment-check="${escapeAttribute(id)}" ${busy || !r.quantity_suggested ? 'disabled' : ''}>Check availability</button>` +
+        `<button class="btn btn-primary" data-equipment-accept="${escapeAttribute(id)}" ${busy || !agreed || !check?.sufficient_stock ? 'disabled' : ''}>Accept reviewed request</button></div></div>` :
+        `<div class="availability-state availability-${r.status === 'reserved' ? 'success' : 'neutral'}"><div class="availability-icon" aria-hidden="true">${r.status === 'reserved' ? '✓' : '○'}</div><div><strong>${r.status === 'reserved' ? 'Reservation saved' : 'Request unavailable'}</strong><p>${r.status === 'reserved' ? 'This equipment reservation has been recorded.' : 'This event is not eligible for acceptance.'}</p></div></div>`) + '</section>';
   }
 
   function eventDetails(item) {
@@ -103,6 +116,41 @@
       `<button class="btn btn-soft" data-equipment-event="${escapeAttribute(event.event_id)}" ${busy ? 'disabled' : ''}>Open organiser request</button></article>`;
   }
 
+  const statusLabel = status => ({available: 'Available', damaged: 'Damaged', under_repair: 'Under Repair', unavailable: 'Unavailable'})[status] || status;
+
+  function operationalCatalogue() {
+    const body = !catalogueItems.length
+      ? '<p class="muted">No equipment catalogue items are visible to your account.</p>'
+      : catalogueItems.map(item => `<form data-equipment-status-form="${escapeAttribute(item.equipment_id)}" class="event-card" style="margin-bottom:12px">` +
+          `<h3>${escapeHtml(item.name || 'Unnamed equipment')}</h3>` +
+          field('Type', item.type) + field('Total quantity', item.total_quantity) +
+          `<div class="field"><label>Operational status<select name="operational_status">${['available', 'damaged', 'under_repair', 'unavailable'].map(status =>
+            `<option value="${status}" ${item.operational_status === status ? 'selected' : ''}>${statusLabel(status)}</option>`).join('')}</select></label></div>` +
+          `<p class="muted">${item.active ? 'Active catalogue item' : 'Inactive catalogue item; it remains excluded from new reservations.'}</p>` +
+          `<button class="btn btn-soft" type="submit" ${busy ? 'disabled' : ''}>Save operational status</button></form>`).join('');
+    return `<section class="panel" style="margin-bottom:20px"><h2>Equipment operational status</h2>` +
+      '<p class="muted">Only active items marked Available can be selected for a new reservation.</p>' + body + '</section>';
+  }
+
+  async function saveOperationalStatus(form) {
+    if (busy) return;
+    const generation = epoch, id = form.dataset.equipmentStatusForm;
+    busy = true; error = ''; notice = ''; render();
+    try {
+      const saved = await request(`/catalogue/${encodeURIComponent(id)}/operational-status`, 'PATCH', {
+        operational_status: form.elements.operational_status.value
+      });
+      if (!current(generation)) return;
+      catalogueItems = catalogueItems.map(item => item.equipment_id === id ? saved : item);
+      catalogue = catalogue.filter(item => item.equipment_id !== id);
+      if (saved.active && saved.operational_status === 'available') catalogue.push(saved);
+      catalogue.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+      checks = {};
+      notice = `${saved.name || 'Equipment'} is now ${statusLabel(saved.operational_status)}.`;
+    } catch (err) { if (current(generation)) error = err.message; }
+    finally { if (current(generation)) { busy = false; render(); } }
+  }
+
   async function saveProposal(form) {
     if (busy) return;
     const values = form.elements;
@@ -125,7 +173,7 @@
   function page() {
     resetSession();
     const isDetail = currentPage === 'equipmentdetails';
-    const title = isDetail ? 'Equipment request details' : currentPage === 'dashboard' ? 'Technical operations' : currentPage === 'assignments' ? 'Event equipment requests' : 'Equipment requests';
+    const title = isDetail ? 'Equipment request details' : currentPage === 'dashboard' ? 'Technical operations' : currentPage === 'assignments' ? 'Event equipment requests' : 'Equipment';
     let content;
     if (currentPage === 'equipmentevent') {
       const event = events.find(e => e.event_id === selectedEvent);
@@ -147,12 +195,13 @@
         ['Accepted equipment requests', String(rows.filter(item => item.reservation.status === 'reserved').length), '✓', 'Saved reservations']
       ]) + content;
     }
+    if (currentPage === 'equipment' && !isDetail) content = operationalCatalogue() + content;
     if (confirmation) content = `<section class="panel" role="status" style="margin-bottom:20px"><h2>Equipment reservation confirmed</h2>${details(confirmation)}<p class="muted">Saved status: ${escapeHtml(confirmation.reservation.status)}</p>` +
       (confirmation.event.status === 'planning' ? '<p class="notice">The reservation is available to the assigned Coordinator under Event Readiness for final approval. The event remains in planning until the Coordinator confirms that all arrangements are ready.</p>' : '') + '</section>' + content;
     const back = isDetail || currentPage === 'equipmentevent' ? '<button class="btn btn-soft" id="equipmentBack">Back to requests</button>' : '';
     return pageHead(title, 'Review organiser requirements, propose quantities, and reserve agreed equipment.',
       `${back}<button class="btn btn-soft" id="equipmentRefresh" ${busy ? 'disabled' : ''}>Refresh</button>`) +
-      `<div id="equipmentReview"><p class="form-error" role="alert" aria-live="polite">${escapeHtml(error)}</p>${content}</div>`;
+      `<div id="equipmentReview"><p class="form-error" role="alert" aria-live="polite">${escapeHtml(error)}</p><p role="status" aria-live="polite">${escapeHtml(notice)}</p>${content}</div>`;
   }
 
   function render() { if (visible()) renderPage(); }
@@ -160,7 +209,7 @@
   async function load() {
     if (busy) return;
     const generation = epoch, id = currentPage === 'equipmentdetails' ? selected : null;
-    busy = true; error = ''; confirmation = null; checks = {}; render();
+    busy = true; error = ''; notice = ''; confirmation = null; checks = {}; render();
     try {
       if (id) {
         const data = await request(`/${encodeURIComponent(id)}`);
@@ -169,11 +218,12 @@
         // Organiser requirements must remain visible even if an older equipment
         // row has inaccessible metadata. Report each failure without hiding the
         // independently loaded inbox.
-        const results = await Promise.allSettled([request(''), request('/context')]);
+        const results = await Promise.allSettled([request(''), request('/context'), request('/catalogue')]);
         if (!current(generation)) return;
         rows = results[0].status === 'fulfilled' ? results[0].value.requests.filter(item => ['planning', 'confirmed'].includes(item.event.status)) : [];
         const context = results[1].status === 'fulfilled' ? results[1].value : {};
         events = (context.events || []).filter(event => ['planning', 'confirmed'].includes(event.status)); catalogue = context.equipment || [];
+        catalogueItems = results[2].status === 'fulfilled' ? results[2].value.equipment || [] : [];
         error = results.filter(result => result.status === 'rejected').map(result => result.reason.message).join(' ');
       }
     } catch (err) {
@@ -199,7 +249,10 @@
         checks = {};
       } else checks[id] = data;
     } catch (err) {
-      if (current(generation)) { error = err.message; delete checks[id]; }
+      if (current(generation)) {
+        if (accept) { error = err.message; delete checks[id]; }
+        else { error = ''; checks[id] = {error: err.message, sufficient_stock: false}; }
+      }
     } finally {
       if (current(generation)) { busy = false; render(); }
     }
@@ -222,6 +275,9 @@
     });
     document.querySelectorAll('[data-equipment-proposal]').forEach(form => {
       form.onsubmit = event => { event.preventDefault(); saveProposal(form); };
+    });
+    document.querySelectorAll('[data-equipment-status-form]').forEach(form => {
+      form.onsubmit = event => { event.preventDefault(); saveOperationalStatus(form); };
     });
     document.querySelectorAll('[data-equipment-open]').forEach(button => {
       button.onclick = () => {

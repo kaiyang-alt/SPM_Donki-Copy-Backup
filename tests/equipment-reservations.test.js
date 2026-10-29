@@ -16,7 +16,7 @@ function fixture(free = 1, acceptError = null, options = {}) {
     venue_booking: [{booking_id: 'booking-1', venue_id: 'venue-1', status: 'confirmed',
       requested_start: row.start_datetime, requested_end: row.end_datetime,
       venue: {name: 'Seminar Room', location: 'Building A'}}]},
-    equipment: {name: 'Projector', type: 'Projector'}};
+    equipment: {equipment_id: 'eq-1', name: 'Projector', type: 'Projector', total_quantity: 1, active: true, operational_status: 'available'}};
   if (options.pendingVenueAlternative) item.event.venue_booking.push({
     booking_id: 'alternative', venue_id: 'venue-2', status: 'requested',
     requested_start: '2026-11-21T01:00:00Z', requested_end: '2026-11-21T04:00:00Z'
@@ -51,7 +51,12 @@ function fixture(free = 1, acceptError = null, options = {}) {
     authenticatedFetch: async (url, requestOptions) => {
       calls.push({url, options: requestOptions});
       if (options.fetch) return options.fetch(url, requestOptions, item);
-      if (url.endsWith('/context')) return {ok: true, json: async () => ({events: options.orphan ? [item.event] : [], equipment: [{equipment_id: 'eq-1', name: 'Projector', type: 'Projector'}]})};
+      if (url.endsWith('/context')) return {ok: true, json: async () => ({events: options.orphan ? [item.event] : [], equipment: [{equipment_id: 'eq-1', name: 'Projector', type: 'Projector', total_quantity: 1, active: true, operational_status: 'available'}]})};
+      if (url.endsWith('/catalogue')) return {ok: true, json: async () => ({equipment: [{equipment_id: 'eq-1', name: 'Projector', type: 'Projector', total_quantity: 1, active: true, operational_status: options.operationalStatus || 'available'}]})};
+      if (url.includes('/catalogue/eq-1/operational-status')) {
+        const payload = JSON.parse(requestOptions.body);
+        return {ok: true, json: async () => ({equipment_id: 'eq-1', name: 'Projector', type: 'Projector', total_quantity: 1, active: true, operational_status: payload.operational_status})};
+      }
       if (url.endsWith('/proposals')) {
         const payload = JSON.parse(requestOptions.body);
         return {ok: true, json: async () => ({...item, reservation: {...row, quantity_suggested: payload.quantity_suggested, proposal_version: 2, organiser_agreed_version: null, organiser_agreed_by: null, organiser_agreed_at: null}})};
@@ -59,7 +64,9 @@ function fixture(free = 1, acceptError = null, options = {}) {
       if (url.endsWith('/agree')) return options.agreeError
         ? {ok: false, json: async () => ({error: options.agreeError})}
         : {ok: true, json: async () => ({...item, reservation: {...row, organiser_agreed_version: row.proposal_version, organiser_agreed_by: 'owner', organiser_agreed_at: '2026-11-19T09:00:00Z'}})};
-      if (url.endsWith('/availability')) return {ok: true, json: async () => ({...item, available_quantity: free, sufficient_stock: free >= 1})};
+      if (url.endsWith('/availability')) return options.availabilityError
+        ? {ok: false, json: async () => ({error: options.availabilityError})}
+        : {ok: true, json: async () => ({...item, available_quantity: free, sufficient_stock: free >= 1})};
       if (url.endsWith('/accept')) return acceptError
         ? {ok: false, json: async () => ({error: acceptError})}
         : {ok: true, json: async () => ({...item, reservation: {...row, status: 'reserved', decided_by: 'tss'}})};
@@ -108,6 +115,16 @@ test('insufficient stock disables final acceptance and explains the quantity', a
   assert.match(f.context.html, /insufficient stock/);
   assert.match(f.context.html, /data-equipment-accept="request-1" disabled/);
   assert.equal(f.calls.filter(call => call.url.endsWith('/accept')).length, 0);
+});
+
+test('availability errors appear beside the review actions instead of as a detached page error', async () => {
+  const message = 'The proposal period must match the confirmed venue booking.';
+  const f = fixture(1, null, {availabilityError: message});
+  f.context.renderPage(); await tick(); await f.check.onclick();
+  assert.match(f.context.html, /availability-error/);
+  assert.match(f.context.html, /Availability check could not be completed/);
+  assert.match(f.context.html, new RegExp(message.replaceAll('.', '\\.')));
+  assert.match(f.context.html, /data-equipment-accept="request-1" disabled/);
 });
 
 test('RPC conflicts remain visible without an optimistic reserved status', async () => {
@@ -161,6 +178,26 @@ test('empty dashboards explain how organiser requests reach the inbox', async ()
   assert.match(f.context.html, /No equipment requests/);
   assert.match(f.context.html, /After Coordinator approval/);
   assert.equal(f.open, undefined);
+});
+
+test('equipment page displays and saves all approved operational statuses', async () => {
+  const f = fixture(1, null, {page: 'equipment'});
+  f.context.renderPage(); await tick();
+  assert.match(f.context.html, /Equipment operational status/);
+  assert.match(f.context.html, /Available/);
+  assert.match(f.context.html, /Damaged/);
+  assert.match(f.context.html, /Under Repair/);
+  assert.match(f.context.html, /Unavailable/);
+  assert.match(f.context.html, /value="available" selected/);
+  const form = f.context.document.querySelectorAll('[data-equipment-status-form]')[0];
+  form.elements = {operational_status: {value: 'damaged'}};
+  form.onsubmit({preventDefault() {}}); await tick();
+  const call = f.calls.find(entry => entry.url.includes('/catalogue/eq-1/operational-status'));
+  assert.equal(call.options.method, 'PATCH');
+  assert.deepEqual(JSON.parse(call.options.body), {operational_status: 'damaged'});
+  assert.match(f.context.html, /Projector is now Damaged/);
+  assert.match(f.context.html, /value="damaged" selected/);
+  assert.equal(f.context.document.querySelectorAll('[data-equipment-proposal]').length, 0);
 });
 
 test('load errors remain visible and do not fabricate dashboard cards', async () => {

@@ -24,7 +24,9 @@ def database():
            "organiser_agreed_by": "owner", "organiser_agreed_at": "2026-11-19T09:00:00Z"}
     data = {"user_role": [{"role": "technical_support"}], "equipment_reservation": [row],
             "event": [{"event_id": "event-1", "name": "Northstar", "status": "planning", "organiser_id": "owner"}],
-            "equipment": [{"equipment_id": "eq-1", "name": "Projector", "type": "Projector", "total_quantity": 1}]}
+            "equipment": [{"equipment_id": "eq-1", "name": "Projector", "type": "Projector", "total_quantity": 1,
+                           "description": None, "location": None, "active": True,
+                           "operational_status": "available"}]}
     queries = {}
     for table in data:
         query = MagicMock()
@@ -258,6 +260,113 @@ def test_inbox_does_not_treat_blank_requirements_as_an_equipment_request(databas
     client, data, _ = database
     data["event"] = [{"event_id": "event-1", "technical_support_required": False, "technical_requirements": "  "}]
     assert service.technical_context(client, "tss")["events"] == []
+
+
+def test_catalogue_displays_every_equipment_operational_status(database):
+    client, data, queries = database
+    data["equipment"] = [
+        {"equipment_id": f"eq-{status}", "name": status, "active": True,
+         "operational_status": status}
+        for status in ["available", "damaged", "under_repair", "unavailable"]
+    ]
+    assert [item["operational_status"] for item in service.list_catalogue(client, "tss")] == [
+        "available", "damaged", "under_repair", "unavailable"
+    ]
+    queries["equipment"].order.assert_called_with("name")
+
+
+@pytest.mark.parametrize("status", ["available", "damaged", "under_repair", "unavailable"])
+def test_technical_support_can_save_each_operational_status(database, status):
+    client, _, queries = database
+    saved = {"equipment_id": REQUEST_ID, "name": "Projector", "active": True,
+             "operational_status": status}
+    client.rpc.return_value.execute.return_value = SimpleNamespace(data=[saved])
+    assert service.update_operational_status(
+        client, "tss", REQUEST_ID, {"operational_status": status}
+    ) == saved
+    client.rpc.assert_called_once_with("update_equipment_operational_status", {
+        "p_equipment_id": REQUEST_ID, "p_operational_status": status,
+    })
+    queries["equipment"].update.assert_not_called()
+
+
+@pytest.mark.parametrize("payload", [None, {}, {"operational_status": None}, {"operational_status": "Retired"}])
+def test_unsupported_operational_status_is_rejected_without_a_write(database, payload):
+    client, _, _ = database
+    with pytest.raises(service.EquipmentError):
+        service.update_operational_status(client, "tss", REQUEST_ID, payload)
+    client.rpc.assert_not_called()
+
+
+@pytest.mark.parametrize("status", ["damaged", "under_repair", "unavailable"])
+def test_non_available_equipment_is_excluded_from_new_proposals(database, status):
+    client, data, queries = database
+    data["equipment"][0]["operational_status"] = status
+    assert service.technical_context(client, "tss")["equipment"] == []
+    queries["equipment"].eq.assert_any_call("operational_status", "available")
+
+
+@pytest.mark.parametrize("status", ["damaged", "under_repair", "unavailable"])
+def test_non_available_equipment_has_zero_new_reservation_availability(database, status):
+    client, data, _ = database
+    data["equipment"][0]["operational_status"] = status
+    result = service.availability(client, "tss", REQUEST_ID)
+    assert result["available_quantity"] == 0
+    assert result["sufficient_stock"] is False
+    client.rpc.assert_not_called()
+
+
+@pytest.mark.parametrize("status", ["damaged", "under_repair", "unavailable"])
+def test_non_available_equipment_cannot_be_proposed_or_newly_reserved(database, status):
+    client, data, _ = database
+    data["equipment"][0]["operational_status"] = status
+    proposal = {"event_id": REQUEST_ID, "equipment_id": REQUEST_ID,
+                "quantity_suggested": 1, "start_datetime": "2026-11-20T09:00:00+08:00",
+                "end_datetime": "2026-11-20T12:00:00+08:00"}
+    with pytest.raises(service.EquipmentError, match="not operationally available"):
+        service.propose_quantity(client, "tss", proposal)
+    with pytest.raises(service.EquipmentError, match="not operationally available"):
+        service.accept_request(client, "tss", REQUEST_ID)
+    client.rpc.assert_not_called()
+
+
+def test_existing_reservation_is_not_cancelled_when_equipment_becomes_unavailable(database):
+    client, data, _ = database
+    data["equipment"][0]["operational_status"] = "damaged"
+    data["equipment_reservation"][0]["status"] = "reserved"
+    client.rpc.return_value.execute.return_value = SimpleNamespace(data=data["equipment_reservation"][0])
+    assert service.accept_request(client, "tss", REQUEST_ID)["reservation"]["status"] == "reserved"
+    client.rpc.assert_called_once_with("accept_equipment_request", {"p_reservation_id": REQUEST_ID})
+
+
+def test_catalogue_routes_are_authenticated_and_role_protected(route_client, database):
+    client, data, _ = database
+    headers = {"Authorization": "Bearer token"}
+    assert route_client.get("/api/equipment-requests/catalogue").status_code == 401
+    response = route_client.get("/api/equipment-requests/catalogue", headers=headers)
+    assert response.status_code == 200
+    assert response.json["equipment"][0]["operational_status"] == "available"
+    data["user_role"] = []
+    assert route_client.get("/api/equipment-requests/catalogue", headers=headers).status_code == 403
+    assert route_client.patch(
+        f"/api/equipment-requests/catalogue/{REQUEST_ID}/operational-status",
+        headers=headers, json={"operational_status": "damaged"}
+    ).status_code == 403
+    client.rpc.assert_not_called()
+
+
+def test_operational_status_route_returns_the_verified_saved_row(route_client, database):
+    client, _, _ = database
+    saved = {"equipment_id": REQUEST_ID, "name": "Projector", "active": True,
+             "operational_status": "under_repair"}
+    client.rpc.return_value.execute.return_value = SimpleNamespace(data=saved)
+    response = route_client.patch(
+        f"/api/equipment-requests/catalogue/{REQUEST_ID}/operational-status",
+        headers={"Authorization": "Bearer token"},
+        json={"operational_status": "under_repair"},
+    )
+    assert response.status_code == 200
+    assert response.json == saved
 
 
 @pytest.mark.parametrize("quantity", [None, 0, -1, 1.5, True, "3"])
