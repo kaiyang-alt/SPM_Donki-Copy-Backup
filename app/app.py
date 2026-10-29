@@ -13,6 +13,7 @@ from app.routes.track_readiness_actions_routes import track_readiness_actions_bp
 from app.routes.coordinator_lead_assignment import coordinator_lead_assignment_blueprint
 from app.routes.venue_availability_routes import venue_availability_bp
 from app.routes.venue_staff_routes import venue_staff_bp
+from app.routes.notifications import notifications_blueprint
 
 
 app = Flask(__name__)
@@ -29,6 +30,7 @@ app.register_blueprint(track_readiness_actions_bp)
 app.register_blueprint(coordinator_lead_assignment_blueprint)
 app.register_blueprint(venue_availability_bp, url_prefix="/api/venue")
 app.register_blueprint(venue_staff_bp, url_prefix="/api/venue")
+app.register_blueprint(notifications_blueprint)
 
 
 @app.route("/")

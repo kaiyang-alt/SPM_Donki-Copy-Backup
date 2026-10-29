@@ -13,6 +13,7 @@ from app.services.coordinator_lead_assignment_service import (
 
 def _client():
     client = MagicMock()
+    client.rpc.return_value.execute.return_value.data = []
     client.auth.get_user.return_value = SimpleNamespace(user=SimpleNamespace(id="lead-1"))
     tables = {
         name: MagicMock()
@@ -90,15 +91,8 @@ def test_lead_assigns_coordinator_without_changing_status_and_notifies_users(
     tables[
         "event"
     ].select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [event]
-    update = tables["event"].update.return_value
-    update.eq.return_value = update
-    update.is_.return_value = update
-    update.execute.return_value.data = [
+    client.rpc.return_value.execute.return_value.data = [
         {**event, "coordinator_id": "coordinator-1"}
-    ]
-    tables["notification"].insert.return_value.execute.return_value.data = [
-        {"notification_id": "notification-1"},
-        {"notification_id": "notification-2"},
     ]
     tables[
         "profile"
@@ -108,17 +102,14 @@ def test_lead_assigns_coordinator_without_changing_status_and_notifies_users(
 
     result = assign_event("token", "event-1", "coordinator-1")
 
-    update_payload = tables["event"].update.call_args.args[0]
-    assert update_payload["coordinator_id"] == "coordinator-1"
-    assert "status" not in update_payload
+    client.rpc.assert_called_once_with(
+        "assign_event_coordinator_by_lead",
+        {"p_event_id": "event-1", "p_coordinator_id": "coordinator-1"},
+    )
     assert result["status"] == "requested"
     assert result["coordinator_name"] == "Maya Tan"
-    notifications = tables["notification"].insert.call_args.args[0]
-    assert {row["recipient_id"] for row in notifications} == {
-        "coordinator-1",
-        "organiser-1",
-    }
-    assert {row["type"] for row in notifications} == {"coordinator_assigned"}
+    tables["event"].update.assert_not_called()
+    tables["notification"].insert.assert_not_called()
 
 
 @patch(
@@ -168,6 +159,7 @@ def test_already_assigned_event_is_not_reassigned(create_client):
     assert error.value.status == 409
     tables["event"].update.assert_not_called()
     tables["notification"].insert.assert_not_called()
+    client.rpc.assert_not_called()
 
 
 def test_routes_require_authentication_and_object_payload():

@@ -13,6 +13,7 @@ from app.services.coordinator_lead_assignment_service import (
 
 def _client():
     client = MagicMock()
+    client.rpc.return_value.execute.return_value.data = []
     client.auth.get_user.return_value = SimpleNamespace(user=SimpleNamespace(id="lead-1"))
     tables = {
         name: MagicMock()
@@ -92,15 +93,8 @@ def test_lead_reassigns_event_and_notifies_outgoing_incoming_and_organiser(
     tables[
         "event"
     ].select.return_value.eq.return_value.limit.return_value.execute.return_value.data = [event]
-    update = tables["event"].update.return_value
-    update.eq.return_value = update
-    update.execute.return_value.data = [
+    client.rpc.return_value.execute.return_value.data = [
         {**event, "coordinator_id": "coordinator-2"}
-    ]
-    tables["notification"].insert.return_value.execute.return_value.data = [
-        {"notification_id": "notification-1"},
-        {"notification_id": "notification-2"},
-        {"notification_id": "notification-3"},
     ]
     tables[
         "profile"
@@ -113,15 +107,12 @@ def test_lead_reassigns_event_and_notifies_outgoing_incoming_and_organiser(
     assert result["coordinator_id"] == "coordinator-2"
     assert result["coordinator_name"] == "Daniel Koh"
     assert result["previous_coordinator_id"] == "coordinator-1"
-    update.eq.assert_any_call("event_id", "event-1")
-    update.eq.assert_any_call("coordinator_id", "coordinator-1")
-    notifications = tables["notification"].insert.call_args.args[0]
-    assert {row["recipient_id"] for row in notifications} == {
-        "coordinator-1",
-        "coordinator-2",
-        "organiser-1",
-    }
-    assert {row["type"] for row in notifications} == {"coordinator_reassigned"}
+    client.rpc.assert_called_once_with(
+        "reassign_event_coordinator_by_lead",
+        {"p_event_id": "event-1", "p_coordinator_id": "coordinator-2"},
+    )
+    tables["event"].update.assert_not_called()
+    tables["notification"].insert.assert_not_called()
 
 
 @patch(
@@ -146,6 +137,7 @@ def test_reassignment_rejects_current_coordinator_as_replacement(create_client):
     assert "different Event Coordinator" in str(error.value)
     tables["event"].update.assert_not_called()
     tables["notification"].insert.assert_not_called()
+    client.rpc.assert_not_called()
 
 
 @patch(

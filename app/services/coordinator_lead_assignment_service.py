@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from app.supabase_client import create_authenticated_supabase_client
 
 
@@ -206,46 +204,6 @@ def assign_event(access_token, event_id, coordinator_id):
                 "This event request is already assigned.", 409
             )
 
-        now = datetime.now(timezone.utc).isoformat()
-        update = (
-            client.table("event")
-            .update({"coordinator_id": coordinator_id, "updated_at": now})
-            .eq("event_id", event_id)
-            .eq("status", "requested")
-            .is_("coordinator_id", "null")
-            .execute()
-            .data
-            or []
-        )
-        if not update:
-            raise CoordinatorLeadAssignmentError(
-                "The request changed or was assigned by another Lead. Reload it before retrying.",
-                409,
-            )
-
-        event_name = event.get("name") or "Untitled event"
-        notifications = [
-            {
-                "event_id": event_id,
-                "recipient_id": coordinator_id,
-                "type": "coordinator_assigned",
-                "message": f"You have been assigned to {event_name}.",
-                "created_at": now,
-            },
-            {
-                "event_id": event_id,
-                "recipient_id": event.get("organiser_id"),
-                "type": "coordinator_assigned",
-                "message": f"An Event Coordinator has been assigned to {event_name}.",
-                "created_at": now,
-            },
-        ]
-        saved = client.table("notification").insert(notifications).execute().data
-        if not saved:
-            raise CoordinatorLeadAssignmentError(
-                "The event was assigned, but notifications could not be created.", 502
-            )
-
         profile_rows = (
             client.table("profile")
             .select("name")
@@ -255,6 +213,20 @@ def assign_event(access_token, event_id, coordinator_id):
             .data
             or []
         )
+        update = (
+            client.rpc(
+                "assign_event_coordinator_by_lead",
+                {"p_event_id": event_id, "p_coordinator_id": coordinator_id},
+            )
+            .execute()
+            .data
+            or []
+        )
+        if not update:
+            raise CoordinatorLeadAssignmentError(
+                "The request changed or was assigned by another Lead. Reload it before retrying.",
+                409,
+            )
     except CoordinatorLeadAssignmentError:
         raise
     except Exception as exc:
@@ -314,52 +286,6 @@ def reassign_event(access_token, event_id, coordinator_id):
                 "Select a different Event Coordinator for reassignment."
             )
 
-        now = datetime.now(timezone.utc).isoformat()
-        update = (
-            client.table("event")
-            .update({"coordinator_id": coordinator_id, "updated_at": now})
-            .eq("event_id", event_id)
-            .eq("coordinator_id", previous_coordinator_id)
-            .execute()
-            .data
-            or []
-        )
-        if not update:
-            raise CoordinatorLeadAssignmentError(
-                "The assignment changed before reassignment completed. Reload it before retrying.",
-                409,
-            )
-
-        event_name = event.get("name") or "Untitled event"
-        notifications = [
-            {
-                "event_id": event_id,
-                "recipient_id": previous_coordinator_id,
-                "type": "coordinator_reassigned",
-                "message": f"You are no longer assigned to {event_name}.",
-                "created_at": now,
-            },
-            {
-                "event_id": event_id,
-                "recipient_id": coordinator_id,
-                "type": "coordinator_reassigned",
-                "message": f"You have been assigned to {event_name}.",
-                "created_at": now,
-            },
-            {
-                "event_id": event_id,
-                "recipient_id": event.get("organiser_id"),
-                "type": "coordinator_reassigned",
-                "message": f"The Event Coordinator for {event_name} has changed.",
-                "created_at": now,
-            },
-        ]
-        saved = client.table("notification").insert(notifications).execute().data
-        if not saved:
-            raise CoordinatorLeadAssignmentError(
-                "The event was reassigned, but notifications could not be created.", 502
-            )
-
         profile_rows = (
             client.table("profile")
             .select("name")
@@ -369,6 +295,20 @@ def reassign_event(access_token, event_id, coordinator_id):
             .data
             or []
         )
+        update = (
+            client.rpc(
+                "reassign_event_coordinator_by_lead",
+                {"p_event_id": event_id, "p_coordinator_id": coordinator_id},
+            )
+            .execute()
+            .data
+            or []
+        )
+        if not update:
+            raise CoordinatorLeadAssignmentError(
+                "The assignment changed before reassignment completed. Reload it before retrying.",
+                409,
+            )
     except CoordinatorLeadAssignmentError:
         raise
     except Exception as exc:
