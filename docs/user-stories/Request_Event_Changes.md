@@ -22,3 +22,7 @@ Ensure that the Event Organiser can:
 - Submit the change request once the change details have been provided.
 - Receive confirmation that the change request has been successfully submitted.
 - View the submitted change request with the status `pending`.
+
+## Test Case Reference
+
+`docs/test-cases/Request_Event_Changes.md`

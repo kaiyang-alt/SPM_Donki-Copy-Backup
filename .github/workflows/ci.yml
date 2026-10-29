@@ -13,6 +13,16 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check PR diff for whitespace errors
+      if: github.event_name == 'pull_request'
+      env:
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        git diff --check "$BASE_SHA...$HEAD_SHA"
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -25,10 +35,10 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install pytest pytest-cov
 
-    - name: Run Pytest
+    - name: Run project health checks
       env:
-        # Mock env vars so Supabase client doesn't throw errors during startup
         SUPABASE_URL: "https://mock.supabase.co"
-        SUPABASE_PUBLISHABLE_KEY: "mock-key"
+        SUPABASE_PUBLISHABLE_KEY: "mock-key-for-ci"
+        SUPABASE_KEY: "mock-key-for-ci"
       run: |
-        python -m pytest -o pythonpath=.
+        python scripts/project_health.py

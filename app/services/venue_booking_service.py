@@ -1,11 +1,12 @@
 from datetime import UTC, date, datetime, time, timedelta, timezone
 import re
 
+from postgrest.exceptions import APIError
+
 from app.supabase_client import create_authenticated_supabase_client
 
 
 SINGAPORE_TIMEZONE = timezone(timedelta(hours=8), name="Asia/Singapore")
-ACTIVE_BOOKING_STATUSES = ("requested", "tentative", "confirmed")
 
 
 class VenueBookingError(Exception):
@@ -14,6 +15,46 @@ class VenueBookingError(Exception):
     def __init__(self, message, status_code=400):
         super().__init__(message)
         self.status_code = status_code
+
+
+def database_error(error):
+    """Translate only known database failures; never return SQL diagnostics."""
+    messages = {
+        "Venue is unavailable for the occupied period": ("The venue is unavailable, including its setup and turnaround time.", 409),
+        "Venue block overlaps a confirmed occupied period": ("The block overlaps a confirmed booking's setup, event or turnaround period.", 409),
+        "Venue commitments contain invalid or ambiguous data": ("Venue booking or block information needs review before availability can be verified.", 409),
+        "B1_CONFIGURATION_REQUIRED": ("Configure the venue's setup and turnaround durations before checking availability or reserving it.", 409),
+        "B1_ZERO_DECISION_REQUIRED": ("The venue's setup and turnaround durations need review.", 409),
+        "B1_NEGATIVE_DURATION": ("The venue's setup and turnaround durations need review.", 409),
+        "B1_INVALID_SCHEDULE": ("Provide a valid venue start and end time.", 400),
+        "B1_DATETIME_OUTSIDE_COMMON_SUPPORTED_RANGE": ("The occupied venue period is outside the supported date range.", 400),
+        "Only pending venue requests can be confirmed": ("Only pending venue requests can be confirmed. Refresh the bookings list.", 409),
+        "This event already has a confirmed venue": ("This event already has a confirmed venue.", 409),
+        "Venue booking not found or inaccessible": ("Venue booking not found or inaccessible.", 404),
+        "A booking setup layout is required": ("Review and save this booking's setup layout before confirmation.", 409),
+        "Release the confirmed venue before changing its arrangement": ("Release and review the confirmed arrangement before changing it.", 409),
+        "Exactly one confirmed venue booking is required": ("The event needs exactly one confirmed venue before equipment can be committed.", 409),
+        "Equipment proposal period must match the confirmed venue booking": ("The venue period must match the agreed equipment period.", 409),
+        "Confirmed venue is unavailable for the proposed period": ("The venue conflicts with a committed equipment arrangement.", 409),
+        "Equipment stock would be overallocated": ("This change would invalidate committed equipment. Review the equipment arrangement first.", 409),
+    }
+    if error.message in messages:
+        message, status = messages[error.message]
+        return VenueBookingError(message, status)
+    if error.code in {"23505", "23P01"}:
+        return VenueBookingError("The venue arrangement conflicts with an existing record.", 409)
+    if error.code == "42501":
+        return VenueBookingError("Your current database permissions do not allow this venue operation.", 403)
+    if error.code in {"PGRST202", "PGRST204", "42883", "42703"}:
+        return VenueBookingError("The venue workflow is not configured in the database. Contact the project team.", 503)
+    return VenueBookingError("Unable to complete the venue operation.", 503)
+
+
+def _rpc(supabase, name, params):
+    try:
+        return supabase.rpc(name, params).execute().data
+    except APIError as error:
+        raise database_error(error) from None
 
 
 def authenticated_venue_client(access_token, role):
@@ -148,28 +189,14 @@ def execute_conflict_check(
     requested_end,
     exclude_booking_id=None,
 ):
-    """Check half-open timestamp ranges against active bookings and venue blocks."""
-    query = (
-        supabase.table("venue_booking")
-        .select("booking_id")
-        .eq("venue_id", venue_id)
-        .in_("status", ACTIVE_BOOKING_STATUSES)
-        .lt("requested_start", requested_end)
-        .gt("requested_end", requested_start)
-    )
+    """Use authoritative occupied periods, including RLS-hidden commitments."""
+    params = {"p_venue_id": venue_id, "p_start": requested_start, "p_end": requested_end}
     if exclude_booking_id:
-        query = query.neq("booking_id", exclude_booking_id)
-    if query.execute().data:
-        return True
-    return bool(
-        supabase.table("venue_block")
-        .select("venue_block_id")
-        .eq("venue_id", venue_id)
-        .lt("start_datetime", requested_end)
-        .gt("end_datetime", requested_start)
-        .execute()
-        .data
-    )
+        params["p_exclude_booking_id"] = exclude_booking_id
+    available = _rpc(supabase, "cs_venue_period_available", params)
+    if not isinstance(available, bool):
+        raise VenueBookingError("Unable to verify venue availability.", 503)
+    return not available
 
 
 def get_coordinator_booking_context(access_token):
@@ -244,7 +271,7 @@ def list_available_venues(
 def submit_venue_booking_request(
     access_token, event_id, venue_id, booking_date, start_time, end_time, setup_layout
 ):
-    """Create a requested booking, which acts as the tentative hold."""
+    """Save a non-blocking alternative with its own period and setup layout."""
     payload = validate_booking_payload(
         {
             "event_id": event_id,
@@ -258,15 +285,6 @@ def submit_venue_booking_request(
     supabase, user_id = authenticated_venue_client(access_token, "event_coordinator")
     event = _event_for_coordinator(supabase, payload["event_id"], user_id)
     _eligible_venue(supabase, payload["venue_id"], event, payload["setup_layout"])
-    existing = (
-        supabase.table("venue_booking")
-        .select("booking_id")
-        .eq("event_id", payload["event_id"])
-        .in_("status", ACTIVE_BOOKING_STATUSES)
-        .execute()
-    )
-    if existing.data:
-        raise VenueBookingError("This event already has an active venue arrangement.", 409)
     if execute_conflict_check(
         supabase,
         payload["venue_id"],
@@ -277,20 +295,12 @@ def submit_venue_booking_request(
             "The selected venue slot is unavailable due to an existing booking or blackout period.",
             409,
         )
-    layout_update = (
-        supabase.table("event")
-        .update({"layout_requirements": payload["setup_layout"]})
-        .eq("event_id", payload["event_id"])
-        .eq("coordinator_id", user_id)
-        .execute()
-    )
-    if not layout_update.data:
-        raise VenueBookingError("Unable to save the selected setup layout.", 409)
     booking_payload = {
         "venue_id": payload["venue_id"],
         "event_id": payload["event_id"],
         "requested_start": payload["requested_start"],
         "requested_end": payload["requested_end"],
+        "setup_layout": payload["setup_layout"],
         "status": "requested",
         "requested_by": user_id,
         "requested_at": datetime.now(UTC).isoformat(),
@@ -317,6 +327,7 @@ def get_all_booking_requests(access_token):
     bookings = (
         supabase.table("venue_booking")
         .select("*, venue(*), event(*)")
+        .order("requested_at", desc=False)
         .execute()
         .data
         or []
@@ -372,29 +383,13 @@ def _decision_response(message, booking):
 
 
 def approve_venue_booking_request(access_token, booking_id):
-    supabase, user_id = authenticated_venue_client(access_token, "venue_staff")
-    booking = _get_booking(supabase, booking_id)
-    if booking.get("status") not in ("requested", "tentative"):
-        raise VenueBookingError("Only pending requests can be approved.", 409)
-    if execute_conflict_check(
-        supabase,
-        booking["venue_id"],
-        booking["requested_start"],
-        booking["requested_end"],
-        exclude_booking_id=booking_id,
-    ):
-        raise VenueBookingError("Cannot approve a conflicting venue request.", 409)
-    updated_booking = _update_pending_booking(
-        supabase,
-        booking,
-        {
-            "status": "confirmed",
-            "decided_by": user_id,
-            "decided_at": datetime.now(UTC).isoformat(),
-            "decision_reason": None,
-        },
-    )
-    return _decision_response("Booking request approved.", updated_booking)
+    supabase, _ = authenticated_venue_client(access_token, "venue_staff")
+    saved = _rpc(supabase, "confirm_venue_booking", {"p_booking_id": booking_id})
+    if isinstance(saved, list) and len(saved) == 1:
+        saved = saved[0]
+    if not isinstance(saved, dict) or saved.get("booking_id") != booking_id or saved.get("status") != "confirmed":
+        raise VenueBookingError("Unable to verify venue confirmation. Reload before retrying.", 503)
+    return _decision_response("Venue confirmed. Remaining pending alternatives were cancelled.", saved)
 
 
 def _decision_reason(reason, alternative_venue_ids):
@@ -443,6 +438,19 @@ def block_venue_availability(
     if reason is not None and not isinstance(reason, str):
         raise VenueBookingError("reason must be a string.")
     supabase, user_id = authenticated_venue_client(access_token, "venue_staff")
+    confirmed_overlap = (
+        supabase.table("venue_booking")
+        .select("booking_id")
+        .eq("venue_id", venue_id)
+        .eq("status", "confirmed")
+        .lt("requested_start", requested_end)
+        .gt("requested_end", requested_start)
+        .execute()
+    )
+    if confirmed_overlap.data:
+        raise VenueBookingError(
+            "Cannot block a venue slot that overlaps a confirmed booking.", 409
+        )
     payload = {
         "venue_id": venue_id,
         "start_datetime": requested_start,
@@ -450,6 +458,7 @@ def block_venue_availability(
         "reason": (reason.strip() or None) if isinstance(reason, str) else None,
         "created_by": user_id,
         "created_at": datetime.now(UTC).isoformat(),
+        "status": "active",
     }
     response = supabase.table("venue_block").insert(payload).execute()
     if not response.data:

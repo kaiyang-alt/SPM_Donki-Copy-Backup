@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from app.supabase_client import create_authenticated_supabase_client
+from app.services.venue_booking_service import VenueBookingError, execute_conflict_check
 
 
 class VenueSearchError(Exception):
@@ -39,25 +40,25 @@ def search_venues(access_token, criteria):
         venues = client.table('venue').select('*').eq('active', True).execute().data or []
         if not venues:
             return []
-        bookings = (client.table('venue_booking').select('venue_id')
-                    .eq('status', 'confirmed').lt('requested_start', end.isoformat())
-                    .gt('requested_end', start.isoformat()).execute().data or [])
-        blocks = (client.table('venue_block').select('venue_id')
-                  .eq('status', 'active').lt('start_datetime', end.isoformat())
-                  .gt('end_datetime', start.isoformat()).execute().data or [])
     except VenueSearchError:
         raise
     except Exception as exc:
         raise VenueSearchError('Unable to search venues.', 502) from exc
 
-    unavailable = {row['venue_id'] for row in bookings + blocks}
     requested = {_normalise(item) for item in facilities}
     results = []
     for venue in venues:
         layout_capacity = _layout_capacity(venue, layout)
         available_facilities = _values(venue.get('facilities'))
-        if (venue.get('venue_id') not in unavailable and layout_capacity is not None
+        if (layout_capacity is not None
                 and layout_capacity >= guest_count and requested <= available_facilities):
+            try:
+                if execute_conflict_check(client, venue['venue_id'], start.isoformat(), end.isoformat()):
+                    continue
+            except VenueBookingError as exc:
+                raise VenueSearchError(str(exc), exc.status_code) from None
+            except Exception as exc:
+                raise VenueSearchError('Unable to search venues.', 502) from exc
             results.append({
                 'venue_id': venue.get('venue_id'), 'name': venue.get('name'),
                 'location': venue.get('location'), 'layout': layout,

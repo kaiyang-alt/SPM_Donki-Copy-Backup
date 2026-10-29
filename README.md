@@ -52,103 +52,43 @@ A user may hold more than one role.
 
 ```text
 SPM_Donki/
-│
 ├── app/
-│   ├── app.py
-│   ├── supabase_client.py
 │   ├── routes/
 │   ├── services/
+│   ├── static/
 │   ├── templates/
-│   └── static/
-│
+│   ├── app.py
+│   └── supabase_client.py
 ├── docs/
 │   ├── architecture/
-│   │   ├── common_structure.md
-│   │   └── project_context.md
-│   │
+│   ├── requirements/
 │   ├── user-stories/
-│   │   ├── README.md
-│   │   └── <story-name>.md
-│   │
 │   ├── test-cases/
-│   │   ├── README.md
-│   │   ├── functional-test-case-prompt.md
-│   │   └── <story-name>.md
-│   │
 │   ├── implementation/
-│   │   └── user-story-implementation-prompt.md
-│   │
 │   └── uml/
-│       ├── README.md
-│       └── <story-diagram>.md
-│
+├── scripts/
 ├── tests/
 ├── .github/
 ├── .env.example
 ├── .gitignore
 ├── AGENTS.md
-├── README.md
-└── requirements.txt
-
-```text
-SPM_Donki/
-│
-├── app/
-│   ├── app.py
-│   ├── supabase_client.py
-│   ├── routes/
-│   ├── services/
-│   ├── templates/
-│   └── static/
-│
-├── docs/
-│   ├── architecture/
-│   │   ├── common_structure.md
-│   │   └── project_context.md
-│   ├── uml/
-│   └── user-stories/
-│
-├── tests/
-├── .github/
-├── .env.example
-├── .gitignore
-├── AGENTS.md
+├── pytest.ini
 ├── README.md
 └── requirements.txt
 ```
 
-## Shared Project Context
+## Documentation Map
 
-Detailed information about the current ConnectSphere architecture, database, status values, business rules, Supabase setup, frontend baseline and development decisions is documented in:
-
-```text
-docs/architecture/project_context.md
-```
-
-Developers and AI coding agents should review this file before implementing a user story.
-
-The concise architecture and service-ownership reference is located at:
-
-```text
-docs/architecture/common_structure.md
-```
-
-## Shared Development Instructions
-
-Development and AI-agent rules are documented in:
-
-```text
-AGENTS.md
-```
-
-These instructions cover areas such as:
-
-- frontend consistency
-- route and service structure
-- database restrictions
-- Git workflow
-- security
-- user-story scope
+| Document / Area | Purpose |
+| --- | --- |
+| `AGENTS.md` | Development and AI-agent guardrails |
+| `docs/requirements/README.md` | Requirement precedence and customer-change process |
+| `docs/architecture/common_structure.md` | Quick architecture and repository reference |
+| `docs/architecture/project_context.md` | Current reconciled shared project baseline |
+| `docs/architecture/database_schema.md` | Current approved/documented database structure |
+| `docs/user-stories/` | Canonical User Story cards |
+| `docs/test-cases/` | Functional test specifications |
+| `docs/implementation/user-story-implementation-prompt.md` | Primary AI-assisted story workflow and orchestration entry point |
 
 ## Local Setup
 
@@ -247,6 +187,7 @@ Development should follow:
 Frontend → Flask Route → Service / Business Logic → Supabase
 ```
 
+<<<<<<< HEAD
 General rules:
 
 - New Flask routes belong in `app/routes/`
@@ -374,3 +315,8 @@ Other secrets
 ```
 
 Use environment variables or approved private team channels for sensitive information.
+=======
+Use `AGENTS.md` for the full development, security, scope and repository-integrity
+rules. Test changes before opening a Pull Request, and obtain human review before
+merge.
+>>>>>>> 3da8002c1dc7118685c899081164b59f9ec66f43

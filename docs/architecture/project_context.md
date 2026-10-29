@@ -1,8 +1,12 @@
 # ConnectSphere Shared Project Context
 
-This document contains the shared technical and functional context for ConnectSphere.
+This document records the current reconciled shared technical and functional
+project baseline for ConnectSphere. It is not the canonical customer-release
+history.
 
-Developers and AI coding agents should treat this file as the current project-level source of truth unless newer confirmed customer requirements or team decisions override it.
+Requirement precedence is owned by `docs/requirements/README.md`. A newer
+confirmed customer requirement may temporarily supersede content in this
+document until the shared baseline is formally reconciled.
 
 ---
 
@@ -297,6 +301,24 @@ rejected
 cancelled
 ```
 
+These are the only persisted values permitted by the live
+`venue_booking.status` CHECK constraint. User-interface wording such as
+`Pending Venue Approval` may represent `requested` or `tentative`, and
+`Approved` may represent `confirmed`; those labels are display text and must
+not be persisted as status values.
+
+### Venue Block
+
+```text
+active
+cancelled
+```
+
+These are the only persisted values permitted by the live
+`venue_block.status` CHECK constraint. Terms such as "blocked" or
+"unavailable" may describe an active block in the interface, but are not
+additional persisted status values.
+
 ### Event Change Request
 
 ```text
@@ -334,18 +356,18 @@ New code should use existing database-supported values instead of inventing new 
 
 ### Coordinator Assignment
 
-- Each submitted event must have exactly one Event Coordinator.
 - A newly submitted request remains in `requested` with no coordinator until an Event Coordinator Lead assigns it.
 - `event_coordinator_lead` is distinct from `event_coordinator`.
+- Coordinator selection is performed manually by the Event Coordinator Lead; no automatic selection algorithm is used.
 - An Event Coordinator Lead assigns an unassigned request by setting `event.coordinator_id`; assignment does not change the `requested` status.
-- The newly assigned coordinator and Event Organiser are notified when assignment occurs.
-- Coordinator-initiated reassignment requires agreement between the outgoing and incoming coordinators.
-- An Event Coordinator Lead may directly replace an event's coordinator without either coordinator's approval.
-- Lead-controlled reassignment notifies the outgoing coordinator, incoming coordinator and Event Organiser.
+- An event has no more than one assigned Event Coordinator at any point in time.
+- The assigned Event Coordinator can access and manage the event through the Coordinator workflow; other Coordinators do not gain access merely because they hold the Coordinator role.
+- The newly assigned Coordinator and Event Organiser are notified when assignment occurs.
+- An Event Coordinator Lead may directly replace an event's Coordinator without requiring acceptance from either the outgoing or incoming Coordinator.
+- After reassignment, the incoming Coordinator gains management access and the outgoing Coordinator loses access through the previous assignment.
+- Lead-controlled reassignment notifies the outgoing Coordinator, incoming Coordinator and Event Organiser.
 - Event Coordinator Leads supervise all active events because the current schema has no Lead-to-event relationship.
 - Active events for Lead oversight are `requested`, `changes_requested`, `planning` and `confirmed`.
-- The outgoing coordinator initiates reassignment.
-- The proposed new coordinator accepts or rejects it.
 
 ---
 
@@ -376,6 +398,17 @@ New code should use existing database-supported values instead of inventing new 
 - Coordinator and Technical Support determine required equipment.
 - If no equipment is required, the equipment requirement may be considered complete.
 - Equipment availability must consider unavailable and already committed quantities.
+- The organiser's submitted technical requirements are the source for Technical
+  Support review after Coordinator approval moves the event into planning,
+  including before a separate equipment row exists. Technical
+  Support proposes a positive quantity; the organiser agrees to that version
+  before Technical Support makes the final reservation. Preserve original
+  requirements and any structured requested quantity.
+- Same-venue equipment reuse may be immediate. Reusing units at a different
+  venue requires a 30-minute transfer gap, compared by venue UUID. Final
+  acceptance checks both venue and equipment availability atomically.
+- The local proposal implementation and its pending Supabase deployment are
+  documented in [Reserve Equipment](../user-stories/reserve-equipment.md).
 
 ---
 
@@ -445,10 +478,17 @@ The current backend contains:
 POST /auth/login
 ```
 
-The existing login implementation currently remains in:
+The login route is registered by the canonical Flask application in
+`app/app.py`. Its route implementation lives in:
 
 ```text
-app/app.py
+app/routes/auth.py
+```
+
+and delegates authentication logic to:
+
+```text
+app/services/auth_service.py
 ```
 
 This is existing baseline functionality.
@@ -764,18 +804,13 @@ Environment-specific secrets belong only in local `.env` files or approved priva
 
 ## 22. Source of Truth
 
-If documents or prototype behaviour disagree, use this priority:
+Requirement precedence is defined in:
 
 ```text
-1. Confirmed customer requirements and clarifications
-2. Approved database schema and RLS design
-3. Relevant user story and acceptance criteria
-4. This shared project context
-5. Shared architecture documentation
-6. AGENTS.md development rules
-7. Approved frontend prototype
+docs/requirements/README.md
 ```
 
-Do not silently guess when an important requirement is unclear.
-
-Raise the ambiguity with the team before changing shared architecture or data design.
+Use this project-context document for shared project facts and decisions after
+requirements have been reconciled. If it conflicts with a newer confirmed
+customer requirement, follow the precedence defined in the requirements guide
+and flag this file for reconciliation.

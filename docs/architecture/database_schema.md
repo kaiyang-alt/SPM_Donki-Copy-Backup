@@ -44,7 +44,7 @@
 | `registration_enabled` | `bool` |  Nullable |
 | `registration_open_at` | `timestamptz` |  Nullable |
 | `registration_close_at` | `timestamptz` |  Nullable |
-| `status` | `text` |  Nullable |
+| `status` | `text` |  Nullable; CHECK `events_status_check` permits `draft`, `requested`, `changes_requested`, `planning`, `approved`, `confirmed`, `completed`, `cancelled`, `withdrawn`, `rejected` |
 | `created_at` | `timestamptz` |  Nullable |
 | `updated_at` | `timestamptz` |  Nullable |
 
@@ -108,6 +108,18 @@
 | `supported_layouts` | `jsonb` |  Nullable |
 | `operating_hours` | `text` |  Nullable |
 | `active` | `bool` |  Nullable |
+| `setup_minutes` | `int4` | Nullable; nonnegative when set |
+| `turnaround_minutes` | `int4` | Nullable; nonnegative when set |
+| `buffer_config_revision` | `bigint` | NOT NULL DEFAULT 0; nonnegative |
+
+The supplied live B1 inspection confirms setup/turnaround must be both null or
+both populated. The controlled save currently requires positive durations;
+zero/null configurations are not silently treated as zero buffers. Occupied
+periods are `[requested_start - setup, requested_end + turnaround)`.
+`b1_save_venue_buffers` remains owned by `b1_venue_buffer_executor`; the approved
+integration acquires the shared equipment/booking advisory lock before venue
+locks and reads the existing request identity without requiring Auth-schema
+access. Its receipt, revision and notification behavior remains in B1's scope.
 
 ## Table `venue_booking`
 
@@ -120,12 +132,43 @@
 | `event_id` | `uuid` |  |
 | `requested_start` | `timestamptz` |  Nullable |
 | `requested_end` | `timestamptz` |  Nullable |
-| `status` | `text` |  Nullable |
+| `status` | `text` |  Nullable; CHECK permits `requested`, `tentative`, `confirmed`, `rejected`, `cancelled` |
 | `requested_by` | `uuid` |  |
 | `requested_at` | `timestamptz` |  Nullable |
 | `decided_by` | `uuid` |  Nullable |
 | `decided_at` | `timestamptz` |  Nullable |
 | `decision_reason` | `text` |  Nullable |
+
+### Venue alternatives deployment — supplied verification, 28 October 2026
+
+| Added column | Type | Contract |
+|---|---|---|
+| `setup_layout` | `text`, nullable for legacy rows | New alternatives require a nonblank, supported per-booking layout. Historical layouts are not inferred or backfilled. |
+
+The developer supplied the [migration verification](../database/venue-booking-alternatives-verification.sql)
+result confirming this column, the `cs_venue_one_confirmed_per_event` partial
+unique index on `event_id WHERE status='confirmed'`, and the following enabled
+triggers: `cs_equipment_booking_lock`, `cs_equipment_venue_block_lock`,
+`cs_venue_booking_validate`, `cs_venue_booking_cancel`, `cs_venue_block_validate`.
+The verified duplicate confirmed-event count is zero; confirmed occupied-period
+validation passed. This is supplied database evidence, not a real-account
+browser or production-load test.
+
+`confirm_venue_booking(uuid)` uses authenticated caller RLS and checks Venue Staff
+membership. It confirms one selection and cancels requested/tentative siblings
+atomically, without changing event status. Successful retries return the saved
+row. Authenticated EXECUTE is enabled and anonymous EXECUTE is disabled.
+`cs_venue_period_available(uuid,timestamptz,timestamptz,uuid)` returns a narrow,
+trusted-owner availability decision including setup/turnaround, confirmed
+bookings and active blocks. Pending alternatives are non-blocking. Existing RLS
+policies still authorise originating writes; the migration adds no table policy.
+The shared `(212,8401)` write lock coordinates venue/block/equipment changes.
+
+Equipment validation now uses the single confirmed selection, ignoring pending
+venue alternatives, while retaining stock, maintenance, consent and the
+30-minute cross-venue equipment transfer rules. Supplied verification confirms
+the integration flags, B1 ownership/request-identity handling, and postgres
+EXECUTE on the pure buffer calculator required by the trusted checker.
 
 ## Table `venue_block`
 
@@ -140,7 +183,7 @@
 | `reason` | `text` |  Nullable |
 | `created_by` | `uuid` |  |
 | `created_at` | `timestamptz` |  Nullable |
-| `status` | `text` |  Nullable |
+| `status` | `text` |  Nullable; CHECK permits `active`, `cancelled` |
 
 ## Table `equipment`
 
@@ -169,12 +212,52 @@
 | `start_datetime` | `timestamptz` |  Nullable |
 | `end_datetime` | `timestamptz` |  Nullable |
 | `technical_requirements` | `text` |  Nullable |
-| `status` | `text` |  Nullable |
+| `status` | `text` |  Nullable; CHECK permits `requested`, `reserved`, `rejected`, `cancelled` |
 | `requested_by` | `uuid` |  |
 | `requested_at` | `timestamptz` |  Nullable |
 | `decided_by` | `uuid` |  Nullable |
 | `decided_at` | `timestamptz` |  Nullable |
 | `decision_reason` | `text` |  Nullable |
+
+### Equipment proposal deployment — supplied live inspection
+
+The [proposal migration](../database/equipment-proposals-migration.sql) adds the
+following columns to `equipment_reservation`. The supplied live preflight
+confirmed these columns and the proposal functions. The later supplied venue
+verification confirms the venue-aware equipment checker is installed. Real-account
+proposal/consent execution remains a separate integration check.
+
+| Name | Type | Purpose |
+|------|------|---------|
+| `quantity_suggested` | `integer`, nullable, positive when set | Staff offer; reserved stock uses this quantity, falling back to original quantity for legacy rows |
+| `suggested_by` | `uuid`, nullable, FK `profile.user_id` | Proposing staff |
+| `suggested_at` | `timestamptz`, nullable | Proposal audit time |
+| `proposal_version` | `bigint NOT NULL DEFAULT 0` | Increments for an offer revision |
+| `organiser_agreed_version` | `bigint`, nullable | Must match current positive proposal version |
+| `organiser_agreed_by` | `uuid`, nullable, FK `profile.user_id` | Event owner giving consent |
+| `organiser_agreed_at` | `timestamptz`, nullable | Consent audit time |
+
+Agreement fields must be all absent or complete/current. Revisions clear them.
+Existing `quantity_requested` and original event requirements are preserved;
+free text is not parsed into a numeric request. No new status or table is added.
+
+RPCs: `propose_equipment_quantity`, `agree_equipment_proposal`, existing
+`accept_equipment_request`, and `cs_equipment_request_available`. RPC calls use
+the caller's authenticated role. Narrow read-only schedule validation and the
+arrangement-change guard use trusted-owner functions to check hidden venue
+commitments without returning other users' booking details; RLS still controls
+the originating writes. The allocator is private. Venue/event writes join the
+existing equipment advisory-lock protocol.
+
+The migration adds Technical Support event SELECT for equipment-related events
+in `planning` or `confirmed` after Coordinator approval, independent of
+reservation existence. Organisers may read their own offers and update only
+guarded agreement fields. Catalogue SELECT is limited to offered items. Existing
+Technical Support catalogue/request policies remain dependencies.
+
+For inbox visibility alone, the separate
+[inbox SELECT patch](../database/equipment-organiser-inbox-access.sql) updates
+only that event SELECT policy and adds no columns or write permissions.
 
 ## Table `registration`
 
@@ -222,6 +305,14 @@
 | `status` | `text` |  Nullable |
 
 ## RLS Policies
+
+### `event_action_log`
+
+| Policy | Command | Roles | Action | USING | WITH CHECK |
+|--------|---------|-------|--------|-------|------------|
+| `Event participants can view event action logs` | SELECT | authenticated | PERMISSIVE | Event organiser or assigned Event Coordinator for the referenced event | — |
+| `Assigned coordinators can create review action logs` | INSERT | authenticated | PERMISSIVE | — | Authenticated assigned Event Coordinator is the actor; action is an approved review transition (`clarification_requested`, `event_approved`, or `event_rejected`) matching the event's current status |
+| `Organisers can create clarification response logs` | INSERT | authenticated | PERMISSIVE | — | Authenticated Event Organiser is the actor and the event remains in `changes_requested` |
 
 ### `equipment`
 
@@ -326,6 +417,9 @@
 
 | Policy | Command | Roles | Action | USING | WITH CHECK |
 |--------|---------|-------|--------|-------|------------|
+| `Assigned coordinators can notify event organisers` | INSERT | authenticated | PERMISSIVE | — | Sender is the assigned Event Coordinator, recipient is that event's Organiser, and notification type matches the event's `changes_requested`, `approved`, or `rejected` status |
+| `Organisers can notify coordinators of clarification` | INSERT | authenticated | PERMISSIVE | — | Sender is the event's Organiser, recipient is the assigned Coordinator, notification type is `clarification_provided`, and event status is `changes_requested` |
+| `Review notification senders can view sent notifications` | SELECT | authenticated | PERMISSIVE | Assigned Coordinators may view `clarification_requested`, `event_approved`, and `event_rejected` notifications sent to the event Organiser; Organisers may view `clarification_provided` notifications sent to the assigned Coordinator | — |
 | `Users can update own notifications` | UPDATE | authenticated | PERMISSIVE | `(recipient_id = auth.uid())` | `(recipient_id = auth.uid())` |
 | `Users can view own notifications` | SELECT | authenticated | PERMISSIVE | `(recipient_id = auth.uid())` | — |
 

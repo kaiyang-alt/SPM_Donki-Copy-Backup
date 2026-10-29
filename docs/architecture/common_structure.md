@@ -1,56 +1,31 @@
 # ConnectSphere Common Structure
 
+This is a quick reference for the established application flow and canonical
+repository locations.
+
 ## Application Flow
 
 Frontend → Flask Route → Service / Business Logic → Supabase
 
-## Shared Frontend
+## Canonical Paths
 
-The approved ConnectSphere light prototype is the frontend baseline.
-
-- HTML: `app/templates/index.html`
-- CSS: `app/static/css/styles.css`
-- JavaScript: `app/static/js/app.js`
-
-All user stories should extend this existing frontend rather than create a separate UI.
-
-## Backend
-
+- Templates: `app/templates/`
+- Static assets: `app/static/`
 - Flask routes: `app/routes/`
-- Business logic: `app/services/`
+- Business and service logic: `app/services/`
 - Shared Supabase connection: `app/supabase_client.py`
 
-## Service Ownership
+Routes receive requests and delegate business decisions to services. Services
+use the shared Supabase connection where persistence is required.
 
-### User / Authentication
-- Supabase Authentication
-- `profile`
-- `user_role`
+## Detailed References
 
-### Event
-- `event`
-- `event_action_log`
-- `event_change_request`
-- `event_coordinator_reassignment`
+| Document | Purpose |
+| --- | --- |
+| `docs/architecture/project_context.md` | Shared service/domain responsibilities and the current reconciled project baseline |
+| `docs/architecture/database_schema.md` | Exact current approved/documented table, column, relationship and RLS structure |
+| `docs/requirements/README.md` | Requirement precedence and customer-change process |
+| `AGENTS.md` | Development and structural guardrails |
 
-### Venue
-- `venue`
-- `venue_booking`
-- `venue_block`
-
-### Equipment
-- `equipment`
-- `equipment_reservation`
-- `equipment_unavailability`
-
-### Registration
-- `registration`
-
-### Notification
-- `notification`
-
-## Rule
-
-A user story should place its route and business logic under the service that owns the functionality.
-
-Do not introduce a new project structure, database table, authentication method or frontend design without team agreement.
+Do not use this quick reference as a second database catalogue. Consult the
+documents above for approved detail.

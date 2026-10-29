@@ -4,10 +4,16 @@
 
 Before implementing any user story, review:
 
-1. `README.md`
-2. `docs/architecture/project_context.md`
-3. The relevant file under `docs/user-stories/`
-4. Relevant UML under `docs/uml/`, if applicable
+1. `README.md` for the repository and development overview.
+2. `docs/requirements/README.md` for requirement precedence.
+3. `docs/architecture/project_context.md` for the current reconciled project
+   baseline.
+4. `docs/architecture/database_schema.md` for the current approved/documented
+   database structure.
+5. The relevant file under `docs/user-stories/`.
+6. The corresponding functional test specification under `docs/test-cases/`,
+   where applicable.
+7. Relevant UML under `docs/uml/`, if applicable.
 
 Use `AGENTS.md` as the development rules for implementation.
 
@@ -36,28 +42,14 @@ route → service/business logic → Supabase
 
 ## Database
 
-Use the existing Supabase schema.
-
-Current application tables:
-
-- `profile`
-- `user_role`
-- `event`
-- `event_action_log`
-- `event_change_request`
-- `event_coordinator_reassignment`
-- `venue`
-- `venue_booking`
-- `venue_block`
-- `equipment`
-- `equipment_reservation`
-- `equipment_unavailability`
-- `registration`
-- `notification`
-
-Do not create, rename or modify tables, columns, relationships or status values without team agreement.
-
-Do not bypass existing Row Level Security policies without team agreement.
+- Use the current approved/documented database structure in
+  `docs/architecture/database_schema.md`.
+- Do not independently invent or modify tables, columns, relationships,
+  constraints, statuses or Row Level Security policies.
+- Shared database or RLS changes require team approval.
+- When an approved schema change is implemented,
+  `docs/architecture/database_schema.md` must also be updated as part of the
+  approved implementation workflow.
 
 ## User Story Implementation
 
@@ -84,3 +76,110 @@ Before coding:
 
 - Never commit `.env`, passwords or secret keys.
 - Use environment variables for Supabase configuration.
+
+## Repository Integrity and Structure Protection
+
+### Default Rule
+
+Do not delete, rename, move, replace or reorganise an existing tracked file or
+directory unless both:
+
+1. The assigned task genuinely requires the structural change.
+2. The developer or team explicitly approves it.
+
+### Before Creating a New File
+
+- Check whether an equivalent canonical file already exists.
+- Check whether the functionality belongs in an existing file.
+- If a shared or documented file appears unexpectedly missing, inspect Git
+  history where appropriate before creating a replacement.
+- Prefer restoring the canonical file instead of creating duplicate `-v2`,
+  `-new`, `-final` or `-latest` files.
+
+### Shared / Structural Files
+
+Treat at minimum the following as shared infrastructure:
+
+- `README.md`
+- `AGENTS.md`
+- `.gitignore`
+- `.env.example`
+- `.github/`
+- `app/app.py`
+- `app/supabase_client.py`
+- `docs/architecture/`
+- `docs/requirements/`
+- `docs/implementation/`
+- `scripts/`
+- `pytest.ini`
+- `requirements.txt`
+
+These files and directories may be modified when legitimately required, but
+changes must remain minimal and scoped.
+
+### Story Files
+
+Agents may update canonical files belonging to the assigned story, including:
+
+- `docs/user-stories/<story-name>.md`
+- `docs/test-cases/<story-name>.md`
+- relevant route, service, frontend and test files
+
+Do not modify another developer's story merely because it is related. Flag
+cross-story impacts instead.
+
+### Deletion Rule
+
+If an existing tracked file appears obsolete and deletion is proposed, stop and
+report:
+
+- the file or path
+- why it appears obsolete
+- its references and dependencies
+- whether a canonical replacement exists
+- the likely impact of deletion
+
+Explicit approval is required before deletion.
+
+### Structural Change Rule
+
+Explicit approval is required before:
+
+- deleting, renaming or moving files or folders
+- merging or splitting canonical files
+- introducing a new top-level directory
+- reorganising routes, services or tests
+- changing the shared application structure
+
+Do not perform structural refactoring merely for cleanliness.
+
+### Preserve Working Structure
+
+Prefer the smallest coherent change. Avoid unrelated formatting or rewrite
+churn.
+
+## Ponytail
+
+- Choose the smallest clear, maintainable solution that fully meets the task,
+  including necessary caller and test changes. Preserve validation, error
+  handling, security and accessibility.
+- Reuse existing helpers, components and established project patterns first,
+  then standard-library or platform features and installed dependencies.
+- Avoid unnecessary abstractions, wrappers, configuration and dependencies.
+  Do not add flexibility or features for hypothetical future needs.
+
+## Stop That Shit
+
+- Reviews, answers and monitoring are read-only unless the user explicitly
+  authorises edits. A review finding is not permission to fix it.
+- Apply the existing story, file and approval boundaries throughout the task.
+  Trace affected callers and failure paths; complete necessary consequences
+  without absorbing another story or adding unrelated refactoring.
+- Add complexity or defensive mechanisms only to address a concrete requirement,
+  supported failure mode or existing guarantee; avoid speculative changes.
+- Run relevant, required verification. Reuse evidence that remains valid for the
+  final state; do not repeat checks or add audits without a concrete reason.
+- Stop when the requested result is complete, required checks support it and no
+  known in-scope blocker remains. Report unresolved blockers accurately.
+- Apply both sections as written instructions. Do not install or enable scripts,
+  hooks, monitoring or automatic enforcement as part of applying them.

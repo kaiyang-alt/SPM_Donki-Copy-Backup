@@ -1,4 +1,25 @@
+import logging
+
 from app.supabase_client import create_supabase_client
+
+
+logger = logging.getLogger(__name__)
+
+
+def _access_lookup_error(table, exc):
+    # Explain the failing lookup without exposing raw database errors or tokens.
+    reasons = {
+        "42501": "database permission denied",
+        "42P17": "recursive access policy",
+        "42P01": "database table missing",
+        "42703": "database column missing",
+        "PGRST205": "table missing from the API schema",
+    }
+    reason = reasons.get(getattr(exc, "code", None), "database request failed")
+    logger.warning("Application access verification: %s lookup failed (%s)", table, reason)
+    return AuthorisationError(
+        f"Unable to verify application access: {table} lookup failed ({reason})."
+    )
 
 
 class AuthenticationError(Exception):
@@ -8,12 +29,12 @@ class AuthenticationError(Exception):
 class AuthorisationError(Exception):
     """Raised when an authenticated account lacks Event Organiser access."""
 
-
 SUPPORTED_LOGIN_ROLES = {
     "event_organiser",
     "event_coordinator",
     "event_coordinator_lead",
     "venue_staff",
+    "technical_support",
 }
 
 
@@ -30,6 +51,7 @@ def login_user(email: str, password: str) -> dict:
     if not response.user or not response.session:
         raise AuthenticationError("Invalid email or password.")
 
+    lookup = "profile"
     try:
         client.postgrest.auth(response.session.access_token)
         profile_response = (
@@ -39,6 +61,7 @@ def login_user(email: str, password: str) -> dict:
             .limit(1)
             .execute()
         )
+        lookup = "user_role"
         role_response = (
             client.table("user_role")
             .select("role")
@@ -47,7 +70,7 @@ def login_user(email: str, password: str) -> dict:
         )
     except Exception as exc:
         client.auth.sign_out()
-        raise AuthorisationError("Unable to verify application access.") from exc
+        raise _access_lookup_error(lookup, exc) from exc
 
     assigned_roles = {
         row.get("role") for row in (role_response.data or []) if isinstance(row, dict)
@@ -84,6 +107,7 @@ def login_for_role(email: str, password: str, role: str) -> dict:
     if not response.user or not response.session:
         raise AuthenticationError("Invalid email or password.")
 
+    lookup = "profile"
     try:
         client.postgrest.auth(response.session.access_token)
         profile_response = (
@@ -93,6 +117,7 @@ def login_for_role(email: str, password: str, role: str) -> dict:
             .limit(1)
             .execute()
         )
+        lookup = "user_role"
         role_response = (
             client.table("user_role")
             .select("role")
@@ -103,7 +128,7 @@ def login_for_role(email: str, password: str, role: str) -> dict:
         )
     except Exception as exc:
         client.auth.sign_out()
-        raise AuthorisationError("Unable to verify application access.") from exc
+        raise _access_lookup_error(lookup, exc) from exc
 
     if not profile_response.data or not role_response.data:
         client.auth.sign_out()
