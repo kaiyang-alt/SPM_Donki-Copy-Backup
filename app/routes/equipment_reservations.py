@@ -38,6 +38,18 @@ def context():
     return _handle(service.technical_context)
 
 
+@equipment_reservations_bp.get("/catalogue")
+def catalogue():
+    return _handle(lambda c, u: {"equipment": service.list_catalogue(c, u)})
+
+
+@equipment_reservations_bp.patch("/catalogue/<equipment_id>/operational-status")
+def update_operational_status(equipment_id):
+    return _handle(lambda c, u: service.update_operational_status(
+        c, u, equipment_id, request.get_json(silent=True)
+    ))
+
+
 @equipment_reservations_bp.post("/proposals")
 def propose():
     return _handle(lambda c, u: service.propose_quantity(c, u, request.get_json(silent=True)))
