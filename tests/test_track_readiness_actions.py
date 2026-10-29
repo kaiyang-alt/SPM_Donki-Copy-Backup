@@ -44,7 +44,7 @@ class FakeClient:
         return [a[0] for n, _, kw in self.log if n == "query" for m, a, _ in kw["log"] if m == "update"]
 
 
-def make_client(*, event_status="planning", technical_requirements=None, bookings=(), reservations=(),
+def make_client(*, event_status="approved", technical_requirements=None, bookings=(), reservations=(),
                 equipment=(("eq1", "Projector"), ("eq2", "Microphone")), coordinator=True, assigned=True):
     event = [{
         "event_id": "e1", "name": "Northstar Industry Forum", "status": event_status,
@@ -189,8 +189,9 @@ def test_completed_tasks_do_not_block(monkeypatch, no_extra_sources):
     assert service.get_readiness(client, "c1", "e1", today=TODAY)["readiness"] == "Ready for Confirmation"
 
 
-def test_confirmation_only_allowed_from_planning_status(no_extra_sources):
-    client = make_client(event_status="requested", bookings=[booking("confirmed")],
+@pytest.mark.parametrize("status", ["requested", "planning", "changes_requested", "confirmed"])
+def test_confirmation_only_allowed_from_approved_status(no_extra_sources, status):
+    client = make_client(event_status=status, bookings=[booking("confirmed")],
                          technical_requirements="No equipment required")
     with pytest.raises(service.ReadinessError) as exc:
         service.confirm_event(client, "c1", "e1", today=TODAY)

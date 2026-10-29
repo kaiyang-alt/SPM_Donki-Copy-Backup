@@ -6,7 +6,7 @@ As an Event Coordinator, I want to submit alternative venue booking requests for
 
 ## Acceptance Criteria
 
-- **AC1:** An authenticated Event Coordinator can select an available venue, date, time slot, and setup layout for an event they are authorised to coordinate. For this story, the eligible event status is `planning`.
+- **AC1:** An authenticated Event Coordinator can select an available venue, date, time slot, and setup layout for an event they are authorised to coordinate. For this story, the eligible event status is `approved`.
 - **AC2:** Before submission and again before Venue Staff confirmation, check for overlapping confirmed venue bookings and active venue blackout periods using the deployed B1 setup/turnaround occupied-period rules. Reject conflicts without saving the attempted submission or confirmation. Pending alternatives do not block the venue slot for other events.
 - **AC3:** An event may have multiple pending alternative venue bookings. Submission saves a non-blocking `requested` booking and does not reserve the venue. Each alternative may have its own date, start/end time and setup layout.
 - **AC4:** Persist each booking linked to its Event ID and Venue ID, with its own period and setup layout. Saving another alternative must not overwrite an earlier booking's layout.
@@ -54,7 +54,7 @@ transfer gap between different venues remains unchanged; it is a separate rule.
 ## Preconditions and Dependencies
 
 - A valid Supabase session with the `event_coordinator` role for submission and `venue_staff` for venue confirmation.
-- The event is visible under the caller's existing RLS policies and is in `planning` status. RLS must enforce which events the Coordinator may coordinate.
+- The event is visible under the caller's existing RLS policies and is in `approved` status. RLS must enforce which events the Coordinator may coordinate.
 - The selected venue exists and the database provides the venue-to-staff assignment relationship.
 - RLS must expose the conflicts required to make an availability decision; filtering out another user's reservation must not make its slot appear free.
 - Database enforcement must prevent overlapping confirmed bookings for one venue and more than one confirmed booking for one event, while permitting multiple non-blocking alternatives. Confirmation and cancellation of other alternatives require an atomic operation under the caller's existing authentication. Application prechecks alone cannot guarantee this across workers.
@@ -440,3 +440,11 @@ schema documentation is rewritten speculatively here.
 - New bookings persist their layout in `venue_booking.setup_layout`; the event-level organiser requirement is preserved. Legacy missing layouts require review rather than fabricated backfill.
 - User-entered dates and times are interpreted as Singapore time (`UTC+08:00`) before being written to the `timestamptz` booking and block columns.
 - A saved booking reports `notification_sent: false` and a warning. Do not retry the booking itself merely because notification delivery is unavailable.
+
+## Team Status Alignment — 29 October 2026
+
+The team confirmed initial event approval as `approved`, followed by venue and
+equipment arrangements, then final event `confirmed`. Venue submission/context
+now require an assigned approved event. Earlier planning references in this
+inspection history describe the superseded implementation. Alternative booking
+statuses, non-blocking behavior, buffers and atomic confirmation are unchanged.

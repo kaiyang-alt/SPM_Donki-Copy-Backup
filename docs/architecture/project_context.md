@@ -8,6 +8,35 @@ Requirement precedence is owned by `docs/requirements/README.md`. A newer
 confirmed customer requirement may temporarily supersede content in this
 document until the shared baseline is formally reconciled.
 
+### Supplied database snapshot — 29 October 2026
+
+The [database reference](database_schema.md) now inventories the supplied
+08:24:13 UTC (16:24:13 Singapore time) PostgreSQL 17.6 catalogue export: 15
+public tables, 77 RLS policies, 32 routines and 22 enabled non-internal triggers.
+It describes deployed behavior, not blanket approval of every deployed workflow.
+
+Automatic coordinator assignment is deployed and moves unassigned submitted
+events from `requested` to `planning`, with organiser/coordinator notifications.
+Its workload-based selection rule is recorded in the database reference;
+customer approval of that selection basis is not established by deployment.
+
+The snapshot's equipment functions and requirements inbox policy use
+`approved`/`confirmed`. The team subsequently confirmed these as the resource
+arrangement gates; this branch now aligns equipment, venue submission and final
+readiness with that decision. `planning` is retained as pre-approval/legacy state.
+Coordinator review accepts auto-assigned planning events. The fresh export
+verifies both the [audit compatibility patch](../database/coordinator-review-planning-patch.sql)
+and the earlier-proposal priority correction. Compared with the prior export,
+only the two intended equipment function bodies and one audit policy changed;
+object ownership, ACLs and the remaining catalogue are unchanged. The developer
+also reported the workflow/status update working. That does not establish every
+negative/concurrency acceptance case was tested live.
+
+The export also confirms venue alternatives, B1 buffer receipts, equipment
+operational-status enforcement, and change-request decision/audit/notification
+RPCs. The exact catalogue, permission boundaries and remaining differences are
+maintained in the database reference rather than duplicated here.
+
 ---
 
 ## 1. System Overview
@@ -145,6 +174,7 @@ equipment_reservation
 equipment_unavailability
 registration
 notification
+venue_buffer_operation
 ```
 
 These singular names are the current naming standard.
@@ -277,6 +307,7 @@ draft
 requested
 changes_requested
 planning
+approved
 confirmed
 completed
 cancelled
@@ -285,6 +316,10 @@ rejected
 ```
 
 Do not introduce additional event statuses without team agreement.
+
+`approved` is present in the supplied live CHECK constraint and some deployed
+workflow gates. The team confirmed `approved` for resource arrangements and `confirmed` for
+final event approval; `planning` does not authorise resource booking.
 
 ---
 
@@ -304,7 +339,8 @@ These are the only persisted values permitted by the live
 `venue_booking.status` CHECK constraint. User-interface wording such as
 `Pending Venue Approval` may represent `requested` or `tentative`, and
 `Approved` may represent `confirmed`; those labels are display text and must
-not be persisted as status values.
+not be persisted as venue-booking status values. The separate `event` CHECK
+currently permits `approved`, as recorded above.
 
 ### Venue Block
 
@@ -326,6 +362,7 @@ agreed
 rejected
 applied
 cancelled
+awaiting_information
 ```
 
 ### Coordinator Reassignment
@@ -359,6 +396,8 @@ New code should use existing database-supported values instead of inventing new 
 - An event must have no more than one assigned Event Coordinator.
 - Coordinator assignment is automatic, but the customer has not specified the
   coordinator-selection algorithm. The selection basis remains unresolved.
+  The deployed trigger currently uses workload/last-event-creation-time/UUID ordering
+  as described in the database reference; deployment is not customer sign-off.
 - Reassignment requires agreement between the outgoing and incoming coordinators.
 - The outgoing coordinator initiates reassignment.
 - The proposed new coordinator accepts or rejects it.
@@ -381,7 +420,13 @@ New code should use existing database-supported values instead of inventing new 
 - The Event Coordinator searches for venues and submits the venue-booking request.
 - Venue Staff has final authority to approve or reject venue bookings.
 - Venue Staff may suggest an alternative venue without restarting the full event-request process.
-- Only one active tentative or confirmed venue/time arrangement should apply to the event at one time.
+- Multiple requested/tentative alternatives may exist for one event, each with
+  its own period and layout. They are non-blocking until Venue Staff confirms
+  one. At most one confirmed arrangement is allowed; confirmation atomically
+  cancels that event's other pending alternatives. No timed expiry is specified.
+- Confirmed venue occupancy includes the venue's configured setup/turnaround
+  durations. A 15-minute setup and 15-minute turnaround produce a 30-minute gap
+  between event periods; those durations are configuration, not a global default.
 - External venues are not part of the core first-release scope.
 
 ---
@@ -393,7 +438,7 @@ New code should use existing database-supported values instead of inventing new 
 - If no equipment is required, the equipment requirement may be considered complete.
 - Equipment availability must consider unavailable and already committed quantities.
 - The organiser's submitted technical requirements are the source for Technical
-  Support review after Coordinator approval moves the event into planning,
+  Support review after Coordinator approval moves the event into approved,
   including before a separate equipment row exists. Technical
   Support proposes a positive quantity; the organiser agrees to that version
   before Technical Support makes the final reservation. Preserve original
@@ -401,8 +446,13 @@ New code should use existing database-supported values instead of inventing new 
 - Same-venue equipment reuse may be immediate. Reusing units at a different
   venue requires a 30-minute transfer gap, compared by venue UUID. Final
   acceptance checks both venue and equipment availability atomically.
-- The local proposal implementation and its pending Supabase deployment are
-  documented in [Reserve Equipment](../user-stories/reserve-equipment.md).
+- Proposal functions/columns and the review-audit compatibility and pending-venue
+  priority corrections are verified in the latest supplied export. Do not rerun
+  the full migration to reconcile other owners' workflow decisions without review.
+- Deployed `equipment.operational_status` permits `available`, `damaged`,
+  `under_repair`, `unavailable`. Requested/reserved equipment writes require an
+  active catalogue item with operational status `available`; this is separate
+  from calculated available quantity and maintenance periods.
 
 ---
 

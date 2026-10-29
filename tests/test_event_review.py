@@ -67,7 +67,7 @@ def test_unrelated_user_cannot_read_clarification_history(database):
     tables['event_action_log'].select.assert_not_called()
 
 
-@pytest.mark.parametrize('status', ['requested', 'changes_requested'])
+@pytest.mark.parametrize('status', ['requested', 'planning', 'changes_requested'])
 def test_coordinator_can_approve_eligible_request(database, status):
     _, tables, event = database
     event['status'] = status
@@ -91,7 +91,7 @@ def test_approval_without_feedback_uses_default_notification(database):
     assert tables['event_action_log'].insert.call_args.args[0]['details'] == APPROVAL_DEFAULT_MESSAGE
 
 
-@pytest.mark.parametrize('status', ['requested', 'changes_requested'])
+@pytest.mark.parametrize('status', ['requested', 'planning', 'changes_requested'])
 def test_rejection_records_required_feedback_and_notifies_organiser(database, status):
     _, tables, event = database
     event['status'] = status

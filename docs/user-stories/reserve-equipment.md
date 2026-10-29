@@ -9,14 +9,14 @@ event has a feasible technical arrangement.
 ## Workflow and Ownership
 
 Keep the workflow on `main`: organiser submits → Coordinator gives initial
-approval (`planning`) → Coordinator requests a venue and Venue Staff approves
+approval (`approved`) → Coordinator requests a venue and Venue Staff approves
 it; Technical Support arranges equipment → Coordinator checks readiness and
 gives final confirmation (`confirmed`).
 
 This story owns only Technical Support equipment review/proposal/reservation
 and the organiser response needed for that proposal. It does not replace
 Coordinator review, venue booking, Venue Staff approval or final confirmation.
-Technical Support may propose equipment during planning while the venue is
+Technical Support may propose equipment after initial approval while the venue is
 being arranged; committing equipment requires the confirmed venue so transfer
 checks can use the actual venue UUID and period.
 
@@ -33,8 +33,8 @@ saved reservation and performs final confirmation when all arrangements pass.
 - **AC1 — Organiser handoff:** Coordinator-approved events with technical support enabled or
   nonblank technical requirements appear in the Technical Support inbox even
   before an equipment reservation exists. Cards open the saved event details.
-  Events in `draft`, `requested` or `changes_requested` are excluded. Coordinator
-  approval moves the event into `planning`; `confirmed` events remain eligible.
+  Events in `draft`, `requested`, `planning` or `changes_requested` are excluded. Coordinator
+  approval moves the event into `approved`; `confirmed` events remain eligible.
 - **AC2 — Suggested quantity:** Staff select catalogue equipment and enter a
   positive whole suggested quantity and a valid period. Preserve the organiser’s
   original requirements and any existing structured requested quantity. Do not
@@ -49,6 +49,9 @@ saved reservation and performs final confirmation when all arrangements pass.
   feasible agreed requests. Unagreed offers do not consume provisional stock.
   Missing or ambiguous data fails validation. Displayed availability uses the
   same venue/transfer allocation rules; it is not a stock guarantee.
+  Earlier pending proposals without a confirmed venue cannot reserve equipment
+  yet and do not claim provisional stock or block another event's checks. The
+  candidate being checked/accepted must still have its own confirmed venue.
 - **AC5 — Transfer:** Compare `venue_booking.venue_id`, not building/name text.
   Reusing units at the same venue allows a 12:00 finish / 12:00 start. At another
   venue, 12:29 is rejected and 12:30 is permitted when the earlier finish is
@@ -77,7 +80,7 @@ venues require a 30-minute transfer gap. These supersede the earlier assumption
 that every inbox card requires a Coordinator-created equipment row.
 
 The existing Coordinator event-review and Venue Staff approval responsibilities
-remain. This implementation requires exactly one active venue booking, confirmed
+remain. This implementation requires exactly one confirmed venue booking
 for the proposal’s exact period, before final equipment reservation. Equipment
 requirements become visible after Coordinator approval; final reservation also
 waits for Venue Staff approval.
@@ -94,12 +97,20 @@ The caller has the appropriate Supabase role. Catalogue and authenticated
 policies must be deployed. The local proposal feature additionally requires the
 [full migration](../database/equipment-proposals-migration.sql). For inbox
 visibility alone, the [SELECT policy patch](../database/equipment-organiser-inbox-access.sql)
-is sufficient alongside the updated app. These artifacts have not been applied
-to live Supabase by this implementation.
+is sufficient alongside the updated app. The latest developer-supplied export
+confirms the proposal objects and both scoped corrections are deployed in the
+shared database. The full migration is
+not an instruction to rerun it over later venue/B1 changes.
 
 Legacy reserved rows continue using their original quantity without fabricated
 organiser agreement. Existing pending rows require an explicit proposal and
 agreement before acceptance. The migration aborts on infeasible legacy schedules.
+
+For deployments that already applied the proposal migration, the scoped
+[pending-venue priority patch](../database/equipment-pending-venue-priority-patch.sql)
+updates availability and final acceptance without replacing venue scheduling
+functions or changing schema/RLS. Apply it as the existing function owner after
+review; pulling application code alone does not update hosted SQL functions.
 
 ## Implementation and Scope
 
@@ -131,3 +142,35 @@ reservation periods cease consuming current stock without a status rewrite.
 Coordinator readiness and event confirmation remain owned by their stories.
 Live Supabase deployment, real-account RLS verification and concurrent production
 load verification remain deployment checks.
+
+## Team Workflow Alignment — 29 October 2026
+
+The team confirmed `approved` for venue/equipment arrangements and `confirmed`
+for final event confirmation. `planning` remains an existing pre-approval/legacy
+status, not permission to reserve resources. This supersedes the earlier
+conversation mapping initial approval to planning. Local equipment gates, venue
+submission and final readiness now follow this agreement. Coordinator review
+can handle auto-assigned planning events; its audit-policy compatibility patch
+is verified in the latest supplied export. No event rows are migrated.
+
+### Deploy to the inspected shared database
+
+1. Run the complete [Coordinator review audit patch](../database/coordinator-review-planning-patch.sql)
+   as the existing table owner. Expect `planning_review_audit_enabled = true`.
+2. Run the complete [equipment priority patch](../database/equipment-pending-venue-priority-patch.sql).
+   Expect two rows with `skips_unconfirmed_prior_proposals = true`.
+3. Run the updated app and refresh the browser. For an existing planning event,
+   its assigned Coordinator must give initial approval so it becomes `approved`;
+   do not use a bulk SQL status update. Venue/equipment arrangements may proceed.
+4. As Technical Support, reload the agreed proposal, check availability and accept.
+   Verify the saved reservation and that the event remains `approved`. Reload
+   Coordinator readiness and give final confirmation only when all checks pass.
+
+No full equipment migration, B1 owner/role changes, replacement authentication or
+event backfill is required for this inspected deployment. If a patch refuses
+changed definitions, obtain a fresh inspection rather than bypassing the guard.
+The developer subsequently reported that the workflow/status update works.
+The subsequent 29 October 2026 08:24:13 UTC export confirms both patches exactly,
+with function owners/ACLs and the remaining catalogue unchanged. These steps are
+retained for other environments; the shared database does not need another apply.
+Per-case live negative/concurrency results remain separate acceptance evidence.

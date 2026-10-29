@@ -23,7 +23,7 @@ def database():
            "quantity_suggested": 1, "proposal_version": 1, "organiser_agreed_version": 1,
            "organiser_agreed_by": "owner", "organiser_agreed_at": "2026-11-19T09:00:00Z"}
     data = {"user_role": [{"role": "technical_support"}], "equipment_reservation": [row],
-            "event": [{"event_id": "event-1", "name": "Northstar", "status": "planning", "organiser_id": "owner"}],
+            "event": [{"event_id": "event-1", "name": "Northstar", "status": "approved", "organiser_id": "owner"}],
             "equipment": [{"equipment_id": "eq-1", "name": "Projector", "type": "Projector", "total_quantity": 1}]}
     queries = {}
     for table in data:
@@ -46,7 +46,7 @@ def test_list_reads_existing_requests_and_related_metadata(database):
     queries["equipment_reservation"].order.assert_called_once_with("requested_at")
 
 
-@pytest.mark.parametrize("event_status", ["planning", "confirmed"])
+@pytest.mark.parametrize("event_status", ["approved", "confirmed"])
 @pytest.mark.parametrize("free,sufficient", [(0, False), (1, True), (2, True), (-1, False)])
 def test_availability_uses_approved_timeline_helper(database, free, sufficient, event_status):
     client, data, queries = database
@@ -74,7 +74,7 @@ def test_acceptance_preserves_request_and_confirms_rpc_returned_row(database, as
     for query in queries.values():
         query.update.assert_not_called()
         query.insert.assert_not_called()
-    assert data["event"][0]["status"] == "planning"
+    assert data["event"][0]["status"] == "approved"
 
 
 def test_retry_of_reserved_request_still_uses_idempotent_rpc(database):
@@ -245,11 +245,11 @@ def test_technical_support_can_use_existing_application_login(monkeypatch):
 def test_inbox_includes_coordinator_approved_requirements_without_equipment_rows(database):
     client, data, queries = database
     data["equipment_reservation"] = []
-    data["event"] = [{"event_id": "event-1", "name": "New organiser submission", "status": "planning",
+    data["event"] = [{"event_id": "event-1", "name": "New organiser submission", "status": "approved",
                       "technical_support_required": False, "technical_requirements": "Two microphones"}]
     result = service.technical_context(client, "tss")
     assert result["events"][0]["name"] == "New organiser submission"
-    queries["event"].in_.assert_called_once_with("status", ["planning", "confirmed"])
+    queries["event"].in_.assert_called_once_with("status", ["approved", "confirmed"])
     queries["event"].or_.assert_called_once_with("technical_support_required.eq.true,technical_requirements.not.is.null")
     client.rpc.assert_not_called()
 
@@ -323,7 +323,7 @@ def test_organiser_agreement_sends_version_only_and_never_updates_quantity(datab
     queries["equipment_reservation"].update.assert_not_called()
 
 
-@pytest.mark.parametrize("status", ["draft", "requested", "changes_requested"])
+@pytest.mark.parametrize("status", ["draft", "requested", "planning", "changes_requested"])
 def test_technical_inbox_waits_for_coordinator_review(database, status):
     client, data, _ = database
     data["event"][0].update(status=status, technical_support_required=True)
@@ -331,6 +331,9 @@ def test_technical_inbox_waits_for_coordinator_review(database, status):
     assert service.list_requests(client, "tss") == []
     with pytest.raises(service.EquipmentError, match="Coordinator approval"):
         service.get_request(client, "tss", REQUEST_ID)
+    with pytest.raises(service.EquipmentError, match="Coordinator approval"):
+        service.accept_request(client, "tss", REQUEST_ID)
+    client.rpc.assert_not_called()
 
 
 @pytest.mark.parametrize("other_pending", [False, True])
@@ -359,7 +362,7 @@ def test_tss_reservation_hands_off_to_existing_coordinator_readiness(database, o
     client.rpc.return_value.execute.side_effect = reserve
     saved = service.accept_request(client, "tss", REQUEST_ID)
     assert saved["reservation"]["status"] == "reserved"
-    assert data["event"][0]["status"] == "planning"
+    assert data["event"][0]["status"] == "approved"
     queries["event"].update.assert_not_called()
 
     data["user_role"] = [{"role": "event_coordinator"}]
@@ -375,7 +378,7 @@ def test_tss_reservation_hands_off_to_existing_coordinator_readiness(database, o
     else:
         update_query = queries["event"]
         update_query.update.return_value = update_query
-        # Keep the initial event read in planning; only the final update returns confirmed.
+        # Keep the initial event read in approved; only the final update returns confirmed.
         update_query.execute.side_effect = [
             SimpleNamespace(data=deepcopy(data["event"])),
             SimpleNamespace(data=[{**data["event"][0], "status": "confirmed"}]),

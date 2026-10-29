@@ -45,10 +45,10 @@ Story: [Submit a Venue Booking Request](../user-stories/submit-venue-booking.md)
 | **Test Case ID** | TC-001 |
 | **Category** | Happy Path |
 | **Test Scenario** | Verify that an Event Coordinator can submit an available venue, period and layout as a non-blocking alternative, notify assigned Venue Staff, and reload its saved details. |
-| **Pre-conditions** | - An Event Coordinator is authenticated.<br>- Event `EVT-101` exists in `planning` status.<br>- Venue `VEN-001` (Grand Hall) has no existing bookings or blackout blocks on `2026-11-15` for time slot `09:00 - 12:00`.<br>- Venue Staff user `STF-301` is assigned to Venue `VEN-001`. |
+| **Pre-conditions** | - An Event Coordinator is authenticated.<br>- Event `EVT-101` exists in `approved` status.<br>- Venue `VEN-001` (Grand Hall) has no existing bookings or blackout blocks on `2026-11-15` for time slot `09:00 - 12:00`.<br>- Venue Staff user `STF-301` is assigned to Venue `VEN-001`. |
 | **Test Steps** | 1. Navigate to the Coordinator Event Workspace for event `EVT-101`.<br>2. Select the option to submit a venue booking request.<br>3. Select Venue `VEN-001`, Date `2026-11-15`, Time Slot `09:00 - 12:00`, and Setup Layout `Theatre`.<br>4. Submit the booking request.<br>5. Reload the workspace and review its saved details and status.<br>6. Check the assigned Venue Staff's notifications. |
 | **Test Data** | `Event ID`: `EVT-101`<br>`Venue ID`: `VEN-001`<br>`Date`: `2026-11-15`<br>`Time Slot`: `09:00 - 12:00`<br>`Setup Layout`: `Theatre` |
-| **Expected Result** | - The conflict check passes.<br>- A booking is saved as `requested`, linked to `EVT-101` and `VEN-001`, with the selected period and its own `Theatre` layout.<br>- The pending alternative does not reserve or block the venue.<br>- A notification is created for assigned Venue Staff `STF-301` via the Notification Service.<br>- After reload the saved period/layout remain visible and the booking displays `Pending Venue Approval`; this label is not a persisted status.<br>- The event remains `planning`. |
+| **Expected Result** | - The conflict check passes.<br>- A booking is saved as `requested`, linked to `EVT-101` and `VEN-001`, with the selected period and its own `Theatre` layout.<br>- The pending alternative does not reserve or block the venue.<br>- A notification is created for assigned Venue Staff `STF-301` via the Notification Service.<br>- After reload the saved period/layout remain visible and the booking displays `Pending Venue Approval`; this label is not a persisted status.<br>- The event remains `approved`. |
 
 ---
 
@@ -59,7 +59,7 @@ Story: [Submit a Venue Booking Request](../user-stories/submit-venue-booking.md)
 | **Test Case ID** | TC-002 |
 | **Category** | Negative |
 | **Test Scenario** | Verify that submission is blocked when the selected slot overlaps a confirmed venue booking or active venue blackout. |
-| **Pre-conditions** | - An Event Coordinator is authenticated.<br>- Event `EVT-102` exists in `planning` status.<br>- Venue `VEN-001` has a blackout record (`venue_block`) or confirmed booking on `2026-11-15` for `14:00 - 18:00`. |
+| **Pre-conditions** | - An Event Coordinator is authenticated.<br>- Event `EVT-102` exists in `approved` status.<br>- Venue `VEN-001` has a blackout record (`venue_block`) or confirmed booking on `2026-11-15` for `14:00 - 18:00`. |
 | **Test Steps** | 1. Navigate to the Coordinator Event Workspace for event `EVT-102`.<br>2. Select the option to submit a formal venue booking request.<br>3. Select Venue `VEN-001`, Date `2026-11-15`, Time Slot `14:00 - 18:00`, and Setup Layout `Theatre`.<br>4. Attempt to submit the booking request. |
 | **Test Data** | `Event ID`: `EVT-102`<br>`Venue ID`: `VEN-001`<br>`Date`: `2026-11-15`<br>`Time Slot`: `14:00 - 18:00`<br>`Setup Layout`: `Theatre` |
 | **Expected Result** | - The conflict check flags the collision.<br>- No booking or notification is created for the failed attempt.<br>- An explicit message explains that the venue slot is unavailable.<br>- Existing bookings remain unchanged. |
@@ -76,7 +76,7 @@ Story: [Submit a Venue Booking Request](../user-stories/submit-venue-booking.md)
 | **Pre-conditions** | - An Event Coordinator is authenticated.<br>- Event `EVT-103` exists in `draft` status (unapproved).<br>- Venue `VEN-002` is available on `2026-11-20`. |
 | **Test Steps** | 1. Navigate to the Coordinator Workspace for event `EVT-103`.<br>2. Attempt to initiate or submit a venue booking request for event `EVT-103`. |
 | **Test Data** | `Event ID`: `EVT-103`<br>`Event Status`: `draft`<br>`Venue ID`: `VEN-002` |
-| **Expected Result** | - The option to submit a venue booking request is disabled or blocked for `EVT-103`.<br>- The system displays an error or warning indicating that venue bookings can only be requested for approved events in planning status. |
+| **Expected Result** | - The option to submit a venue booking request is disabled or blocked for `EVT-103`.<br>- The system displays an error or warning indicating that venue bookings can only be requested for approved events in approved status. |
 
 ---
 
@@ -87,7 +87,7 @@ Story: [Submit a Venue Booking Request](../user-stories/submit-venue-booking.md)
 | **Test Case ID** | TC-004 |
 | **Category** | Negative |
 | **Test Scenario** | Verify that attempting to submit a venue booking request with missing required selection fields fails validation and prevents record creation. |
-| **Pre-conditions** | - An Event Coordinator is authenticated.<br>- Event `EVT-104` exists in `planning` status. |
+| **Pre-conditions** | - An Event Coordinator is authenticated.<br>- Event `EVT-104` exists in `approved` status. |
 | **Test Steps** | 1. Navigate to the Coordinator Event Workspace for event `EVT-104`.<br>2. Select the option to submit a formal venue booking request.<br>3. Select Venue `VEN-001` and Date `2026-11-15`, but leave Time Slot and Setup Layout unselected.<br>4. Attempt to submit the booking request. |
 | **Test Data** | `Event ID`: `EVT-104`<br>`Venue ID`: `VEN-001`<br>`Date`: `2026-11-15`<br>`Time Slot`: `[Unselected]`<br>`Setup Layout`: `[Unselected]` |
 | **Expected Result** | - Submission is rejected by input validation.<br>- Validation error messages highlight the unselected required fields.<br>- No booking or notification is created. |
@@ -131,7 +131,7 @@ booking response alone is insufficient.
 | **Test Case ID** | TC-007 |
 | **Category** | Happy Path |
 | **Test Scenario** | Submit alternatives with different periods/layouts and verify their non-blocking behavior. |
-| **Pre-conditions** | A Coordinator is assigned planning events `EVT-101` and `EVT-102`. Grand Hall supports Theatre; Seminar Room supports Classroom. Both periods below have no confirmed booking or active blackout. |
+| **Pre-conditions** | A Coordinator is assigned approved events `EVT-101` and `EVT-102`. Grand Hall supports Theatre; Seminar Room supports Classroom. Both periods below have no confirmed booking or active blackout. |
 | **Test Steps** | 1. Submit alternative A for `EVT-101`.<br>2. Submit alternative B for the same event.<br>3. Reload both alternatives.<br>4. Submit a request for `EVT-102` at A's venue and overlapping period.<br>5. As Venue Staff, confirm the `EVT-102` request.<br>6. Repeat the pending-alternative variant with A recorded as `tentative`. |
 | **Test Data** | A: Grand Hall, `15 November 2026 09:00–12:00`, Theatre.<br>B: Seminar Room, `16 November 2026 13:00–16:00`, Classroom.<br>Other event: Grand Hall, `15 November 2026 10:00–11:00`. |
 | **Expected Result** | Both alternatives save as `requested` and retain their own dates, periods and layouts after reload. Neither overwrites the other. Pending alternatives do not block the other event's submission or Venue Staff confirmation. The same holds for an existing `tentative` alternative. Confirming the other event does not cancel `EVT-101`'s alternatives. |
@@ -155,10 +155,10 @@ booking response alone is insufficient.
 | **Test Case ID** | TC-017 |
 | **Category** | Happy Path |
 | **Test Scenario** | Venue Staff confirms the selected alternative and automatically cancels only the same event's remaining pending alternatives. |
-| **Pre-conditions** | `EVT-101` is planning with alternatives A/B/C and historical D/E. An unrelated event has pending F. A has no confirmed conflict or active blackout. |
+| **Pre-conditions** | `EVT-101` is approved with alternatives A/B/C and historical D/E. An unrelated event has pending F. A has no confirmed conflict or active blackout. |
 | **Test Steps** | 1. As Venue Staff, confirm A.<br>2. Reload Venue Staff and Coordinator views.<br>3. Inspect the saved alternatives and event status. |
 | **Test Data** | A: requested Grand Hall, `15 November 2026 09:00–12:00`, Theatre.<br>B: requested Seminar Room, `16 November 2026 13:00–16:00`, Classroom.<br>C: tentative Studio, `17 November 2026 10:00–11:00`, Theatre.<br>D: rejected; E: cancelled; F: requested for `EVT-102`. |
-| **Expected Result** | A becomes `confirmed` and reserves its venue/period. B/C become `cancelled` automatically in the same operation. D/E/F remain unchanged. All booking records, periods and layouts are retained. Reload shows the saved results; the event remains `planning`. Cancellation follows confirmation, with no invented timed expiry. |
+| **Expected Result** | A becomes `confirmed` and reserves its venue/period. B/C become `cancelled` automatically in the same operation. D/E/F remain unchanged. All booking records, periods and layouts are retained. Reload shows the saved results; the event remains `approved`. Cancellation follows confirmation, with no invented timed expiry. |
 
 ### TC-018 — Recheck Availability and Roll Back Failed Confirmation
 
@@ -170,7 +170,7 @@ booking response alone is insufficient.
 | **Pre-conditions** | `EVT-101` has requested A/B and tentative C. A was available at submission. A controlled isolated database supports failure injection for the rollback variant. |
 | **Test Steps** | 1. Arrange a confirmed booking for another event overlapping A.<br>2. Attempt to confirm A and reload A/B/C.<br>3. Repeat independently with an active blackout instead of the confirmed booking.<br>4. With no conflict, induce a database failure during automatic cancellation and attempt confirmation again. |
 | **Test Data** | A: Grand Hall, `15 November 2026 09:00–12:00`.<br>Competing confirmed booking or active block: same venue, `10:00–11:00`. |
-| **Expected Result** | Each failure displays an error and leaves A/B/C in their original statuses. A is not reserved, siblings are not partially cancelled, and the event remains `planning`. Rollback is verified against the database, not only a simulated error response. |
+| **Expected Result** | Each failure displays an error and leaves A/B/C in their original statuses. A is not reserved, siblings are not partially cancelled, and the event remains `approved`. Rollback is verified against the database, not only a simulated error response. |
 
 ### TC-019 — Retry Confirmation Safely and Prevent a Second Selection
 
@@ -179,7 +179,7 @@ booking response alone is insufficient.
 | **Test Case ID** | TC-019 |
 | **Category** | Negative |
 | **Test Scenario** | Retrying the selected booking is harmless; a stale attempt to confirm an alternative cannot replace it. |
-| **Pre-conditions** | A/B are alternatives for planning event `EVT-101`. A is successfully confirmed and B automatically cancelled. A stale Venue Staff view still shows B as pending. |
+| **Pre-conditions** | A/B are alternatives for approved event `EVT-101`. A is successfully confirmed and B automatically cancelled. A stale Venue Staff view still shows B as pending. |
 | **Test Steps** | 1. Repeat the successful confirmation of A.<br>2. Attempt to confirm B from the stale view and directly through the same API.<br>3. Reload both bookings.<br>4. In a separate synthetic legacy fixture with confirmed A and pending B, attempt to confirm B. |
 | **Test Data** | A: Grand Hall, `15 November 2026 09:00–12:00`.<br>B: Seminar Room, `16 November 2026 13:00–16:00`. |
 | **Expected Result** | Repeating A returns the saved outcome without duplicating confirmation effects. B cannot become confirmed in either fixture; A is unchanged. No new booking is created, unrelated records remain unchanged and no automatic event confirmation occurs. |
@@ -272,3 +272,7 @@ blocked by AC5; successful booking responses retain the explicit warning.
 | AC6 | TC-001, TC-015 | API context and UI display/reload checks passed locally; real-account browser check pending. |
 | AC7 | TC-017–TC-018 | Real local SQL atomic cancellation/rollback and Python RPC-return checks passed. |
 | AC8 | TC-013, TC-019 | Local concurrent SQL, saved-row retry and prevention of conflicting confirmation passed. Production-load verification pending. |
+
+Status gate update, 29 October 2026: booking submission now requires event
+`approved`; `planning` is included among negative pre-approval cases. Existing
+venue confirmation does not itself change the event to `confirmed`.

@@ -11,7 +11,7 @@ function fixture(free = 1, acceptError = null, options = {}) {
     proposal_version: 1, organiser_agreed_version: options.unagreed ? null : 1,
     organiser_agreed_by: options.unagreed ? null : 'owner', organiser_agreed_at: options.unagreed ? null : '2026-11-19T09:00:00Z', status: 'requested', start_datetime: '2026-11-20T01:00:00Z',
     end_datetime: '2026-11-20T04:00:00Z'};
-  const item = {reservation: row, event: {event_id: 'event-1', organiser_id: 'owner', name: '<script>event</script>', status: options.eventStatus || 'planning',
+  const item = {reservation: row, event: {event_id: 'event-1', organiser_id: 'owner', name: '<script>event</script>', status: options.eventStatus || 'approved',
     description: '<img src=x onerror=alert(1)>', technical_requirements: 'Projector and technician',
     venue_booking: [{booking_id: 'booking-1', venue_id: 'venue-1', status: 'confirmed',
       requested_start: row.start_datetime, requested_end: row.end_datetime,
@@ -96,7 +96,7 @@ test('review checks stock, posts only request ID, and renders the returned reser
   assert.match(f.context.html, /Equipment reservation confirmed/);
   assert.match(f.context.html, /Saved status: reserved/);
   assert.match(f.context.html, /assigned Coordinator under Event Readiness for final approval/);
-  assert.match(f.context.html, /event remains in planning/);
+  assert.match(f.context.html, /event remains approved/);
   const call = f.calls.find(call => call.url.endsWith('/accept'));
   assert.equal(call.options.method, 'POST');
   assert.equal(call.options.body, undefined);
@@ -172,7 +172,7 @@ test('load errors remain visible and do not fabricate dashboard cards', async ()
 });
 
 test('an inaccessible existing equipment row does not hide new organiser requirements', async () => {
-  const f = fixture(1, null, {page: 'dashboard', orphan: true, eventStatus: 'planning', listError: 'Required event information is not accessible.'});
+  const f = fixture(1, null, {page: 'dashboard', orphan: true, eventStatus: 'approved', listError: 'Required event information is not accessible.'});
   f.context.renderPage(); await tick();
   assert.match(f.context.html, /Required event information is not accessible/);
   assert.equal(f.context.document.querySelectorAll('[data-equipment-event]').length, 1);
@@ -229,10 +229,10 @@ test('a previous session response cannot populate the new account dashboard', as
 
 
 test('approved organiser requirements appear before any equipment proposal exists', async () => {
-  const f = fixture(1, null, {page: 'dashboard', orphan: true, eventStatus: 'planning'});
+  const f = fixture(1, null, {page: 'dashboard', orphan: true, eventStatus: 'approved'});
   f.context.renderPage(); await tick();
   assert.match(f.context.html, /Open organiser request/);
-  assert.match(f.context.html, /<strong>planning<\/strong>/);
+  assert.match(f.context.html, /<strong>approved<\/strong>/);
   const button = f.context.document.querySelectorAll('[data-equipment-event]')[0];
   button.onclick();
   assert.equal(f.context.currentPage, 'equipmentevent');
@@ -295,7 +295,7 @@ test('stale organiser agreement shows an error instead of confirming consent', a
   assert.doesNotMatch(f.context.html, /Agreement saved/);
 });
 
-for (const status of ['draft', 'requested', 'changes_requested']) {
+for (const status of ['draft', 'requested', 'planning', 'changes_requested']) {
   test(`Technical Support inbox excludes ${status} events until Coordinator approval`, async () => {
     const f = fixture(1, null, {page: 'dashboard', orphan: true, eventStatus: status});
     f.context.renderPage(); await tick();

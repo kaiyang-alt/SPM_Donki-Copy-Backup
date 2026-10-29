@@ -92,7 +92,7 @@ SELECT b1_save_venue_buffers('70000000-0000-0000-0000-000000000001',15,15,0,gen_
 SET LOCAL ROLE postgres;
 SET LOCAL request.jwt.claim.sub='';
 INSERT INTO event(event_id,organiser_id,name,status)
-VALUES('70000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001','Permission test','planning');
+VALUES('70000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001','Permission test','approved');
 INSERT INTO venue_booking(booking_id,event_id,venue_id,requested_start,requested_end,status,setup_layout)
 VALUES('70000000-0000-0000-0000-000000000003','70000000-0000-0000-0000-000000000002',
  '70000000-0000-0000-0000-000000000001','2026-11-20 09:00+08','2026-11-20 12:00+08','requested','Theatre');

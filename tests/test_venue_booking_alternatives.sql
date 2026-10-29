@@ -19,7 +19,7 @@ SELECT set_config('request.jwt.claim.sub','',true);
 INSERT INTO event(event_id,organiser_id,coordinator_id,name,status,technical_support_required,technical_requirements)
 SELECT ('30000000-0000-0000-0000-'||lpad(n::text,12,'0'))::uuid,
  '00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000005',
- 'Event '||n,'planning',true,'Projector' FROM generate_series(1,4) n;
+ 'Event '||n,'approved',true,'Projector' FROM generate_series(1,4) n;
 SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000005',true);
 INSERT INTO venue_booking(booking_id,event_id,venue_id,requested_start,requested_end,status,setup_layout,requested_by)
@@ -140,6 +140,6 @@ SELECT b1_save_venue_buffers('20000000-0000-0000-0000-000000000002',20,20,1,
 SELECT b1_save_venue_buffers('20000000-0000-0000-0000-000000000002',20,20,1,
  '90000000-0000-0000-0000-000000000001');
 SELECT pg_temp.check_true((SELECT buffer_config_revision=2 FROM venue WHERE venue_id='20000000-0000-0000-0000-000000000002'),'B1 save and receipt retry must preserve revision behavior');
-SELECT pg_temp.check_true((SELECT bool_and(status='planning') FROM event),'Venue/equipment operations must not confirm events');
+SELECT pg_temp.check_true((SELECT bool_and(status='approved') FROM event),'Venue/equipment operations must not confirm events');
 SELECT pg_temp.check_true(NOT has_function_privilege('anon','confirm_venue_booking(uuid)','EXECUTE'),'Anonymous confirmation execute must be denied');
 ROLLBACK;

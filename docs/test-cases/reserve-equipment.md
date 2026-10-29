@@ -16,7 +16,7 @@ All clocks below are Singapore time.
 
 | ID / Criteria | Steps / Test data | Expected result |
 |---|---|---|
-| TC-001 / AC1 | Organiser submits an event needing equipment. Do not create an equipment row. Sign in as Technical Support, refresh the dashboard and open its card. Repeat with only nonblank technical text and the support flag false. | No card appears while draft/requested/changes_requested. Coordinator moves event to planning, then saved requirements appear and open without an equipment row. Planning/confirmed events allow proposals. |
+| TC-001 / AC1 | Organiser submits an event needing equipment. Do not create an equipment row. Sign in as Technical Support, refresh the dashboard and open its card. Repeat with only nonblank technical text and the support flag false. | No card appears while draft/requested/planning/changes_requested. Coordinator moves event to approved, then saved requirements appear and open without an equipment row. Approved/confirmed events allow proposals. |
 | TC-002 / AC2 | For an eligible event, save suggested quantities blank, zero, negative, fractional, then three. Include an existing structured requested quantity five. | Invalid values fail; three saves as `requested`, five stays intact, and stock is not committed. Text-only original requirements remain text, never a guessed numeric quantity. |
 | TC-003 / AC3, AC7 | Organiser opens Equipment proposals, reviews three offered from five requested, and agrees. Attempt read/consent with another organiser and attempt direct quantity/status edits. | Only owner can read/respond. Agreement stores the reviewed version; arbitrary organiser edits fail. No stock commitment yet. |
 | TC-004 / AC4, AC6 | Try acceptance before consent, then agree and accept with stock and venue available. Retry after success. | Before consent fails. Successful RPC reserves exactly three, preserves five and returns saved metadata. Retry returns same row; no duplicate allocation. |
@@ -28,22 +28,24 @@ All clocks below are Singapore time.
 | TC-010 / AC4, AC8 | Remove confirmed venue; add a second active booking; mismatch period; deactivate venue; add overlapping venue booking/block; include null/invalid effective data. Repeat incompatible changes after reservation. | Invalid final acceptance fails; changes invalidating an existing commitment roll back. Hidden venue commitments cannot make the schedule appear free. |
 | TC-011 / AC4, AC6 | Two agreed requests compete. Accept later first; repeat with infeasible earlier request, equal/missing timestamps and simultaneous acceptances. | Earlier feasible agreed request retains provisional priority. Infeasible request consumes none. Ambiguous priority fails. Concurrent calls cannot double allocate. |
 | TC-012 / AC7 | Call RPCs anonymously or as unrelated role; try direct table edits forging agreement/version. Apply migration twice in isolated database; include infeasible legacy reserved schedule. | Permissions/guards block bypasses. Rerun preserves data; invalid legacy schedule aborts migration atomically. |
+| TC-014 / AC4, AC6 | An older agreed proposal has no confirmed venue (including a non-overlapping 2029 period). Check availability and accept a later-requested, agreed 2026 event with its own confirmed venue. Then try accepting the venue-less proposal itself. Repeat with a feasible earlier overlapping request. | The venue-less proposal contributes no provisional allocation and remains pending. The ready event can reserve available stock and retry safely. The venue-less candidate itself is rejected. Feasible earlier overlapping demand still blocks over-allocation; failed acceptance commits nothing. |
+| TC-015 / AC1, AC6, AC7 | Review an auto-assigned planning event as its Coordinator, approve it, arrange a venue, propose equipment, obtain organiser agreement, check availability and accept, then confirm through readiness. Try proposing/reserving during planning and forging the approval audit as an organiser. | Resource work starts only at approved. Equipment reservation preserves event approved; readiness can move it to confirmed. Planning work is blocked, audit role/assignment/state restrictions remain, and SQL patches can be rerun. |
 
 ## Local Verification — 22 October 2026
 
 TC-013 (handoff): follow main's flow from organiser submission through initial
 Coordinator approval, venue approval, staff proposal, organiser agreement and
 staff reservation, then reload Coordinator readiness. Saving equipment must
-set only its reservation to `reserved`; the event stays `planning`. The existing
+set only its reservation to `reserved`; the event stays `approved`. The existing
 readiness service recognises reserved equipment, and final confirmation remains
 a Coordinator action once all arrangements are ready. Automated service
 integration now covers accepted equipment appearing in Coordinator readiness,
-the event staying in planning after TSS acceptance, successful Coordinator
+the event staying in approved after TSS acceptance, successful Coordinator
 confirmation, and confirmation blocked while another equipment request is
 pending. Live account execution of
 this full handoff remains pending.
 
-The latest inbox policy restricts visibility to planning/confirmed events;
+The latest inbox policy restricts visibility to approved/confirmed events;
 Python/UI regressions cover the revised gate. The updated SQL policy still
 requires live deployment and verification.
 
@@ -66,3 +68,54 @@ use simulated Supabase responses; PostgreSQL checks use real local SQL with
 synthetic policies. No live Supabase deployment or browser/account verification
 was performed. Concurrent acceptance/load remains a deployment verification
 requirement; local serial checks do not establish production concurrency behavior.
+
+## Pending-Venue Priority Regression — 29 October 2026
+
+The shared-data diagnosis found an earlier agreed 2029 proposal with no confirmed
+venue aborting a ready 2026 event's availability check. TC-014 reproduces this
+with real local PostgreSQL 17: it fails on the original functions and passes
+with the scoped patch. Both availability and final acceptance skip the earlier
+venue-less proposal; the candidate's own venue requirement, retry behavior and
+feasible overlapping demand priority remain enforced.
+
+The SQL proposal suite, patch rerun and venue-alternatives SQL compatibility
+checks passed locally. Project health passed with 348 Python tests; the equipment
+UI suite passed 21 tests. This correction has not been applied to live Supabase;
+Family Day's successful live reservation remains pending deployment and retest.
+
+## Approved Workflow Alignment — 29 October 2026
+
+TC-015 is covered by the application regressions and
+`tests/test_coordinator_review_workflow.sql`. The SQL test reproduces the supplied
+Coordinator audit policy, applies its patch twice, and checks real authenticated
+approval audit writes, rejected organiser forgeries, approved equipment visibility,
+consent, availability, reservation and status preservation. It also checks that
+planning is insufficient for equipment proposals. The Python handoff test verifies
+readiness confirms an approved event only when other arrangements are complete.
+
+Final project health: **355 Python tests passed**. Venue/equipment UI suites:
+**29 tests passed**. Local PostgreSQL proposal and venue-alternatives suites,
+both scoped patches and patch retries passed. These results use synthetic RLS;
+they are not evidence that the new patches are deployed or that the full live
+browser workflow has passed. Reconcile other story owners' canonical status
+wording with the shared team decision without changing unrelated behavior.
+
+## Subsequent Developer Confirmation
+
+After receiving the patches and aligned app, the developer reported that the
+workflow and status update work. Record this as user-reported functional evidence,
+not a new catalogue inspection or a pass for every case above. Individual live
+results for stock exhaustion, overlap/transfer boundaries and concurrent requests
+were not supplied with this confirmation.
+
+## Post-Patch Catalogue Verification — 29 October 2026
+
+The developer supplied a fresh export captured at 08:24:13 UTC (16:24:13 Singapore
+time). Its two changed equipment function bodies exactly match the priority
+patch, and the only changed RLS policy exactly matches the Coordinator audit
+patch. All other catalogue sections and routine metadata are unchanged from
+the earlier export. This verifies deployment in the shared database, in addition
+to the developer's functional confirmation. Earlier pending-deployment notes
+above describe preparation stages and are superseded by this evidence. No new
+case-by-case live stock-exhaustion, transfer-boundary or concurrency results were
+provided, so those are not marked passed by this inspection.

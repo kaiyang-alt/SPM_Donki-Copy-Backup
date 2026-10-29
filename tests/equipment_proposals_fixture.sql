@@ -12,7 +12,7 @@ CREATE TABLE public.event(event_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),or
  coordinator_id uuid REFERENCES profile,name text,description text,technical_requirements text,venue_requirements text,
  technical_support_required boolean,start_datetime timestamptz,end_datetime timestamptz,
  preferred_start_datetime timestamptz,preferred_end_datetime timestamptz,created_at timestamptz DEFAULT now(),
- status text CHECK(status IN ('draft','requested','changes_requested','planning','confirmed','completed','cancelled','withdrawn','rejected')));
+ status text CHECK(status IN ('draft','requested','changes_requested','planning','approved','confirmed','completed','cancelled','withdrawn','rejected')));
 CREATE TABLE public.venue(venue_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),name text,location text,active boolean DEFAULT true);
 CREATE TABLE public.venue_booking(booking_id uuid PRIMARY KEY DEFAULT gen_random_uuid(),event_id uuid REFERENCES event,
  venue_id uuid REFERENCES venue,requested_start timestamptz,requested_end timestamptz,
@@ -69,8 +69,8 @@ BEGIN
  INSERT INTO equipment(equipment_id,name,type,total_quantity) VALUES('10000000-0000-0000-0000-000000000001','Projector','Projector',p_total);
  INSERT INTO venue(venue_id,name,location) VALUES('20000000-0000-0000-0000-000000000001','Room A','Same building'),('20000000-0000-0000-0000-000000000002','Room B','Same building');
  INSERT INTO event(event_id,organiser_id,name,status,technical_support_required,technical_requirements,preferred_start_datetime,preferred_end_datetime) VALUES
- ('30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','Organiser Event A','planning',true,'Five projectors please','2026-11-20 09:00+08','2026-11-20 12:00+08'),
- ('30000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001','Organiser Event B','planning',true,'One projector please',('2026-11-20 '||p_b_start||'+08')::timestamptz,'2026-11-20 14:00+08');
+ ('30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001','Organiser Event A','approved',true,'Five projectors please','2026-11-20 09:00+08','2026-11-20 12:00+08'),
+ ('30000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001','Organiser Event B','approved',true,'One projector please',('2026-11-20 '||p_b_start||'+08')::timestamptz,'2026-11-20 14:00+08');
  INSERT INTO venue_booking(booking_id,event_id,venue_id,requested_start,requested_end,status) VALUES
  ('40000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','2026-11-20 09:00+08','2026-11-20 12:00+08','confirmed'),
  ('40000000-0000-0000-0000-000000000002','30000000-0000-0000-0000-000000000002',CASE WHEN p_same_venue THEN '20000000-0000-0000-0000-000000000001' ELSE '20000000-0000-0000-0000-000000000002' END::uuid,('2026-11-20 '||p_b_start||'+08')::timestamptz,'2026-11-20 14:00+08','confirmed');
