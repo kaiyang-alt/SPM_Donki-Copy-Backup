@@ -174,7 +174,7 @@ class Database:
                     "event_id": "EVT-101",
                     "coordinator_id": "COORD-1",
                     "name": "Conference",
-                    "status": "planning",
+                    "status": "approved",
                     "expected_attendance": 80,
                     "layout_requirements": None,
                 }
@@ -313,7 +313,7 @@ def test_tc_001_success_uses_live_schema_and_persists_layout(client, database):
     assert "warning" in data
 
 
-def test_context_returns_only_assigned_planning_events_and_saved_bookings(client, database):
+def test_context_returns_only_assigned_approved_events_and_saved_bookings(client, database):
     database.rows["venue_booking"].append(active_booking(event_id="EVT-101"))
     response = client.get("/api/venue-bookings/context", headers=HEADERS)
     assert response.status_code == 200
@@ -377,9 +377,9 @@ def test_tc_002_blackout_prevents_insert(client, database):
 
 @pytest.mark.parametrize(
     "status",
-    ["draft", "requested", "changes_requested", "confirmed", "completed", "cancelled", "withdrawn", "rejected"],
+    ["draft", "requested", "changes_requested", "planning", "confirmed", "completed", "cancelled", "withdrawn", "rejected"],
 )
-def test_tc_003_only_planning_events_can_be_booked(client, database, status):
+def test_only_approved_events_can_be_booked(client, database, status):
     database.rows["event"][0]["status"] = status
     assert submit(client).status_code == 400
     assert database.rows["venue_booking"] == []

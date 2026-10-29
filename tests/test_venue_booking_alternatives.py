@@ -306,7 +306,7 @@ def test_cancelled_alternatives_do_not_leave_venue_outstanding(alternatives_db, 
     result, error = event_service.get_event_details_for_organiser("EVT-101", "OWNER-1")
     assert error is None
     assert result["outstanding_arrangements"] == []
-    assert result["status"] == "planning"
+    assert result["status"] == "approved"
     condition, actions = _evaluate_venue(bookings)
     assert condition["complete"] is True
     assert actions == []

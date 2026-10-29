@@ -157,9 +157,9 @@ def _event_for_coordinator(supabase, event_id, user_id):
     if not response.data:
         raise VenueBookingError("Event not found or not assigned to this Coordinator.", 404)
     event = response.data[0]
-    if event.get("status") != "planning":
+    if event.get("status") != "approved":
         raise VenueBookingError(
-            "Venue bookings can only be requested for approved events in planning status."
+            "Venue bookings can only be requested for approved events."
         )
     return event
 
@@ -200,13 +200,13 @@ def execute_conflict_check(
 
 
 def get_coordinator_booking_context(access_token):
-    """Return assigned planning events, active venues, and persisted bookings."""
+    """Return assigned approved events, active venues, and persisted bookings."""
     supabase, user_id = authenticated_venue_client(access_token, "event_coordinator")
     events = (
         supabase.table("event")
         .select("*")
         .eq("coordinator_id", user_id)
-        .eq("status", "planning")
+        .eq("status", "approved")
         .execute()
         .data
         or []
