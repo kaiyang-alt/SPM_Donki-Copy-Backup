@@ -365,6 +365,7 @@ EXECUTE on the pure buffer calculator required by the trusted checker.
 
 ### Columns
 
+
 | Name | Type | Nullability / default |
 |---|---|---|
 | `equipment_id` | `uuid` | NOT NULL; DEFAULT `gen_random_uuid()` |
@@ -382,6 +383,21 @@ EXECUTE on the pure buffer calculator required by the trusted checker.
 |---|---|---|
 | `equipment_operational_status_check` | `CHECK (operational_status = ANY (ARRAY['available'::text, 'damaged'::text, 'under_repair'::text, 'unavailable'::text]))` | true |
 | `equipment_pkey` | `PRIMARY KEY (equipment_id)` | true |
+
+
+### Operational-status controls
+
+- `update_equipment_operational_status(uuid, text)` is an authenticated
+  `SECURITY DEFINER` function that permits only users with the
+  `technical_support` role to update this field. Direct general-purpose UPDATE
+  access to `equipment` is not granted.
+- The `cs_equipment_operational_status_guard` trigger prevents a new or changed
+  `requested` or `reserved` equipment reservation unless its catalogue item is
+  active and has operational status `available`.
+- A non-available status blocks new reservations but does not cancel or modify
+  reservations that already exist.
+- The approved deployment SQL is
+  [equipment-operational-status-migration.sql](../database/equipment-operational-status-migration.sql).
 
 
 ## Table `equipment_reservation`

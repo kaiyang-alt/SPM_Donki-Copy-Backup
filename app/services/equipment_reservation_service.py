@@ -14,6 +14,9 @@ class EquipmentError(Exception):
 
 # Only known database messages may reach the browser. Never expose raw errors.
 RPC_ERRORS = {
+    "Unsupported equipment operational status": ("Choose Available, Damaged, Under Repair, or Unavailable.", 400),
+    "Equipment item not found": ("Equipment item not found or inaccessible.", 404),
+    "Equipment is not operationally available": ("This equipment is not operationally available for a new reservation.", 409),
     "Venue commitments contain invalid or ambiguous data": ("Venue booking or block information needs clarification before equipment can be reserved.", 409),
     "Exactly one confirmed venue booking is required": ("Confirm one venue booking before reserving equipment.", 409),
     "Equipment proposal period must match the confirmed venue booking": ("The proposal period must match the confirmed venue booking. Revise the proposal and obtain agreement again.", 409),
@@ -48,6 +51,9 @@ RPC_ERRORS = {
     "Technical Support authentication is required": ("Technical Support access is required.", 403),
     "Equipment stock would be overallocated": ("Equipment is unavailable for the full requested period.", 409),
 }
+
+OPERATIONAL_STATUSES = {"available", "damaged", "under_repair", "unavailable"}
+EQUIPMENT_FIELDS = "equipment_id,name,type,description,total_quantity,location,active,operational_status"
 
 
 def validate_id(value):
@@ -102,11 +108,45 @@ def technical_context(client, user_id):
               .or_("technical_support_required.eq.true,technical_requirements.not.is.null")
               .in_("status", ["approved", "confirmed"])
               .order("created_at").execute().data or [])
-    equipment = (client.table("equipment").select("equipment_id,name,type,total_quantity")
-                 .eq("active", True).order("name").execute().data or [])
+    equipment = (client.table("equipment").select(EQUIPMENT_FIELDS)
+                 .eq("active", True).eq("operational_status", "available")
+                 .order("name").execute().data or [])
+    equipment = [item for item in equipment if item.get("active") is True
+                 and item.get("operational_status") == "available"]
     events = [event for event in events if event.get("status") in {"approved", "confirmed"}
               and (event.get("technical_support_required") or str(event.get("technical_requirements") or "").strip())]
     return {"events": events, "equipment": equipment}
+
+
+def list_catalogue(client, user_id):
+    """Return all catalogue items and their saved operational status."""
+    ensure_technical_support(client, user_id)
+    return (client.table("equipment").select(EQUIPMENT_FIELDS)
+            .order("name").execute().data or [])
+
+
+def update_operational_status(client, user_id, equipment_id, payload):
+    """Use the approved role-checking RPC to update only operational status."""
+    ensure_technical_support(client, user_id)
+    try:
+        equipment_id = str(UUID(str(equipment_id)))
+    except (ValueError, TypeError, AttributeError):
+        raise EquipmentError("A valid equipment ID is required.") from None
+    if not isinstance(payload, dict) or not isinstance(payload.get("operational_status"), str):
+        raise EquipmentError("Choose an operational status.")
+    status = payload["operational_status"].strip().lower()
+    if status not in OPERATIONAL_STATUSES:
+        raise EquipmentError("Choose Available, Damaged, Under Repair, or Unavailable.")
+    result = _rpc(client, "update_equipment_operational_status", {
+        "p_equipment_id": equipment_id,
+        "p_operational_status": status,
+    })
+    if isinstance(result, list) and len(result) == 1:
+        result = result[0]
+    if not isinstance(result, dict) or result.get("equipment_id") != equipment_id \
+            or result.get("operational_status") != status:
+        raise EquipmentError("Unable to verify the saved equipment status. Reload before retrying.", 503)
+    return result
 
 
 def _rpc(client, name, params):
@@ -129,11 +169,15 @@ def _rpc(client, name, params):
 def _related(client, reservation):
     event = (client.table("event").select(EVENT_FIELDS)
              .eq("event_id", reservation["event_id"]).limit(1).execute().data)
-    equipment = (client.table("equipment").select("equipment_id,name,type,total_quantity")
+    equipment = (client.table("equipment").select(EQUIPMENT_FIELDS)
                  .eq("equipment_id", reservation["equipment_id"]).limit(1).execute().data)
     if not event or not equipment:
         raise EquipmentError("Required event or equipment information is not accessible.", 403)
     return {"reservation": reservation, "event": event[0], "equipment": equipment[0]}
+
+
+def _operationally_available(equipment):
+    return equipment.get("active") is True and equipment.get("operational_status") == "available"
 
 
 def _request(client, reservation_id):
@@ -171,6 +215,8 @@ def availability(client, user_id, reservation_id):
     quantity = row.get("quantity_suggested")
     if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity <= 0:
         raise EquipmentError("Save a positive suggested quantity before checking availability.", 409)
+    if not _operationally_available(details["equipment"]):
+        return {**details, "available_quantity": 0, "sufficient_stock": False}
     free = _rpc(client, "cs_equipment_request_available", {"p_reservation_id": validate_id(reservation_id)})
     if not isinstance(free, int) or isinstance(free, bool):
         raise EquipmentError("Unable to verify equipment availability.", 503)
@@ -185,6 +231,8 @@ def accept_request(client, user_id, reservation_id):
     row = details["reservation"]
     if row.get("status") != "reserved" and details["event"].get("status") not in {"approved", "confirmed"}:
         raise EquipmentError("Coordinator approval is required before reserving equipment.", 409)
+    if row.get("status") != "reserved" and not _operationally_available(details["equipment"]):
+        raise EquipmentError("This equipment is not operationally available for a new reservation.", 409)
     if row.get("status") != "reserved" and not (
         row.get("quantity_suggested") and row.get("proposal_version", 0) > 0
         and row.get("organiser_agreed_version") == row.get("proposal_version")
@@ -227,6 +275,8 @@ def propose_quantity(client, user_id, payload):
     }
     # Metadata is checked before the write; the RPC rechecks authorisation itself.
     metadata = _related(client, {"event_id": params["p_event_id"], "equipment_id": params["p_equipment_id"]})
+    if not _operationally_available(metadata["equipment"]):
+        raise EquipmentError("This equipment is not operationally available for a new reservation.", 409)
     saved = _saved_proposal(_rpc(client, "propose_equipment_quantity", params))
     return {**metadata, "reservation": saved}
 
