@@ -1,940 +1,741 @@
-# ConnectSphere User Story Implementation Prompt
+# ConnectSphere Primary AI Story Workflow
 
-You are a software developer working on the ConnectSphere project.
+This is the primary ConnectSphere AI-assisted workflow for taking one assigned
+story or capability from customer material through an implementation-ready,
+tested and committed result.
 
-Your task is to implement **ONE assigned user story** using the existing ConnectSphere repository, approved requirements, shared architecture and approved functional test cases.
+A developer may provide either:
 
-The implementation must remain within the scope of the supplied user story.
+- the latest customer release or clarification material and an existing
+  assigned story name/path; or
+- the latest customer release or clarification material and a newly assigned
+  capability that does not yet have a story file.
 
-Do not redesign or rebuild unrelated parts of the system.
+The AI agent is responsible for orchestrating the complete staged workflow for
+that one assignment. The developer should not need to paste separate prompts at
+each stage. The agent must read the repository prompt and guidance files itself.
+
+The workflow is:
+
+```text
+Customer material
+-> story reconciliation or creation
+-> Human Gate 1: story and Acceptance Criterion approval
+-> functional-test generation or update
+-> Human Gate 2: functional-test approval
+-> implementation-readiness, UML review and schema/RLS audit
+-> Human Gate 3: shared-architecture approval, when required
+-> implementation
+-> automated tests
+-> traceability
+-> project health
+-> commit
+```
+
+Work on only one assigned story/capability. Follow `AGENTS.md` throughout.
+
+A customer release may affect several stories, but this workflow does not
+recursively take ownership of them. Perform blast-radius analysis, record the
+dependency, and hand each affected story to its owner. Continue beyond
+reconciliation only for the currently assigned story or for a shared change
+that the team has explicitly assigned and approved as shared work.
+
+Use risk-proportional depth. Low-risk story work should not be forced through
+database, concurrency or architecture design that it does not require. Human
+Gate 3 exists only when a genuine shared schema, RLS, status, role, constraint
+or workflow decision is needed.
 
 ---
 
-# 1. PURPOSE OF THIS TASK
+# Phase 0 - Working Tree and Input Check
 
-This task is for **USER STORY IMPLEMENTATION**.
+Before changing anything:
 
-You may:
+1. Confirm the current Git branch.
+2. Inspect `git status`.
+3. Detect unrelated uncommitted or untracked work.
 
-- inspect the existing repository
-- modify existing application files where required
-- create story-specific route modules
-- create story-specific service modules
-- extend the existing frontend
-- integrate with the existing Supabase database
-- add or update automated pytest tests where appropriate
-- fix story-related defects discovered during implementation
+If unrelated working-tree changes exist, stop and report them. Do not overwrite,
+stage, revert, move or commit another developer's work.
 
-You must NOT:
+Identify:
 
-- implement unrelated user stories
-- perform unrelated refactoring
-- redesign the whole application
-- replace the existing architecture
-- invent new requirements
-- create new database structures without approval
-- bypass existing security controls
-- change shared project decisions simply because another approach seems cleaner
+- the assigned existing story name/path, or the newly assigned capability; and
+- the latest customer material supplied in the current session, if any.
 
-Implement the smallest coherent set of changes required to satisfy the assigned story.
+Customer material supplied through the current AI session may be used as
+requirement evidence without first being committed to the repository. Do not
+create repository copies unless the developer explicitly asks for that work.
 
 ---
 
-# 2. REQUIRED CONTEXT
+# Phase 1 - Requirement Reconciliation
 
-Before implementation, review the following files:
+Read before editing:
 
-```text
-README.md
-AGENTS.md
-docs/architecture/project_context.md
-docs/user-stories/<relevant-story>.md
-docs/test-cases/<relevant-story>.md
-Relevant UML under docs/uml/, if applicable
-```
+- `docs/requirements/README.md`
+- `README.md`
+- `AGENTS.md`
+- `docs/architecture/project_context.md`
+- the relevant existing story, if one exists
+- its existing functional test specification, if one exists
+- relevant customer material supplied in the session
+- relevant UML, where applicable
+- repository implementation only as supporting context
 
-Use these files according to the following responsibilities.
+Follow the canonical requirement precedence in
+`docs/requirements/README.md`. Do not reproduce or invent a competing
+source-of-truth hierarchy.
 
-## README.md
+Existing code, prototype behaviour, passing tests and current database
+limitations are evidence about the implementation, not authority to weaken a
+newer confirmed customer requirement.
 
-Use for:
+## Existing Story Classification
 
-- repository structure
-- local setup
-- development workflow
-- testing workflow
-- shared project navigation
+For an existing story, determine and explain whether it is:
 
-## AGENTS.md
+- KEEP
+- MODIFY
+- PARTIALLY SUPERSEDED
+- REWRITE
+- RETIRE / REPLACE
 
-Use as the implementation rules.
-
-Follow its restrictions regarding:
-
-- frontend consistency
-- backend structure
-- database changes
-- Git workflow
-- security
-- story scope
-
-## Shared Project Context
-
-Use:
+Use this canonical-file rule:
 
 ```text
-docs/architecture/project_context.md
+EXISTING STORY
+-> update the existing canonical file in place
+
+NEW CAPABILITY
+-> create one new canonical story file
 ```
 
-for existing ConnectSphere facts such as:
+Do not create `-v2`, `-final`, `-new` or `-latest` copies. Git provides version
+history.
 
-- architecture
-- user roles
-- current database tables
-- current status values
-- confirmed business rules
-- authentication approach
-- Row Level Security model
-- frontend baseline
-- current project decisions
+## Phase 1 Output - Canonical Story File
 
-## User Story Document
-
-Use:
+Generate or update:
 
 ```text
-docs/user-stories/<relevant-story>.md
+docs/user-stories/<story-name>.md
 ```
 
-for the exact scope of the assigned feature.
-
-It may contain:
+Use the canonical guidance in `docs/user-stories/README.md`. Include, where
+applicable:
 
 - User Story
 - Acceptance Criteria
 - Relevant Customer Clarifications
 - Preconditions / Dependencies
 - Test Case Reference
-- UML Reference
+- Relevant UML Reference
 - Implementation Notes
+- Requirement Revision note
 
-## Functional Test Cases
+Do not embed full functional test cases in the story file.
 
-Use:
+At this phase:
 
-```text
-docs/test-cases/<relevant-story>.md
-```
+- flag possible schema, RLS, role, status, constraint, notification or shared
+  workflow impacts;
+- do not perform detailed schema design;
+- do not weaken the requirement to fit the current architecture;
+- do not modify runtime code or pytest tests.
 
-as the approved functional behaviour that the implementation should satisfy.
+Present a concise reconciliation summary covering:
 
-Functional test cases support implementation and verification.
+- unchanged requirements
+- changed requirements
+- removed or superseded requirements
+- new requirements
+- cross-story impacts
+- potential shared dependencies
+- genuinely unresolved questions
 
-They do not override confirmed requirements.
+## Human Gate 1 - Story and Acceptance Criteria Approval
 
-## UML
+After generating or updating the story, stop.
 
-Use relevant UML only where provided.
+Do not generate functional tests, implement code, change schema/RLS, write
+pytest tests or commit. Wait for explicit developer approval. Silence is not
+approval.
 
-UML should clarify implementation.
+Examples of acceptable approval include:
 
-Do not invent additional architecture simply because a diagram does not exist.
+- `Story approved, continue`
+- `AC approved, proceed`
+- an equivalent explicit instruction
 
----
-
-# 3. SOURCE-OF-TRUTH PRIORITY
-
-If supplied information conflicts, use this priority:
-
-```text
-1. Confirmed customer requirements and clarifications
-2. Approved database schema and RLS design
-3. User Story and Acceptance Criteria
-4. Approved functional test cases
-5. docs/architecture/project_context.md
-6. Existing shared architecture documentation
-7. AGENTS.md implementation rules
-8. Approved frontend prototype
-```
-
-Do not silently resolve an important contradiction yourself.
-
-If a conflict materially affects implementation, flag it before proceeding.
+If revisions are requested, update the same canonical story file, present the
+revised summary and stop for approval again.
 
 ---
 
-# 4. BEFORE WRITING CODE
+# Phase 2 - Functional Test Specification
 
-Before modifying the repository:
+Begin only after Human Gate 1 is explicitly approved.
 
-1. Read the assigned User Story.
-2. Read every Acceptance Criterion.
-3. Review Relevant Customer Clarifications.
-4. Review Preconditions / Dependencies.
-5. Review the approved functional test cases.
-6. Review relevant UML if one exists.
-7. Inspect the existing files related to the story.
-8. Identify the smallest set of files that need to change.
-9. Confirm that the story can be implemented using the existing database and architecture.
+Read and follow:
 
-Do not begin implementation based only on the story title.
+```text
+docs/test-cases/functional-test-case-prompt.md
+```
+
+Inspect the canonical specification:
+
+```text
+docs/test-cases/<story-name>.md
+```
+
+Apply these rules:
+
+```text
+File does not exist
+-> create it
+
+Existing tests remain valid
+-> preserve them
+
+Approved behaviour changed
+-> update affected tests
+
+Behaviour was removed or superseded
+-> remove or replace obsolete tests
+
+Approved behaviour lacks coverage
+-> add tests where required
+```
+
+Do not create versioned copies. Preserve stable test IDs where practical.
+Maintain explicit traceability from Acceptance Criteria to functional test
+cases.
+
+## Human Gate 2 - Functional Test Approval
+
+After generating or updating the specification, report:
+
+- tests added
+- tests modified
+- tests removed
+- Acceptance Criterion coverage
+- implementation dependencies flagged
+- open requirement questions, if any
+
+Then stop. Do not implement runtime code, modify schema/RLS, write pytest tests
+or commit. Wait for explicit approval such as `Functional tests approved,
+continue` or an equivalent instruction.
+
+If revisions are requested, update the same canonical test specification and
+stop for approval again.
 
 ---
 
-# 5. CONFLICT AND AMBIGUITY RULE
+# Phase 3 - Implementation Readiness Audit
 
-Do not start coding if there is a meaningful unresolved conflict between:
+Begin only after Human Gate 2 is explicitly approved.
 
-```text
-User Story
-Acceptance Criteria
-Customer Clarifications
-Functional Test Cases
-Database design
-Existing shared project rules
-```
+Inspect all relevant:
 
-that changes the expected behaviour.
+- routes and services
+- frontend files
+- automated pytest files
+- Flask application or blueprint registration
+- `docs/architecture/database_schema.md`
+- constraints and status assumptions
+- RLS and permission assumptions
+- authentication
+- notification dependencies
+- duplicate or legacy implementations
+- shared files affected by the story
 
-Do not guess.
+Search the repository for relevant route paths, function names, table/column
+names, status strings, business-rule wording, obsolete tests and duplicate
+implementations.
 
-Clearly identify:
+## UML Rule
 
-```text
-Conflict:
-<what disagrees>
+UML is supporting design documentation, not a requirement source. It is not
+mandatory for every story.
 
-Why it matters:
-<how it affects implementation>
+- Inspect existing relevant UML where applicable.
+- Stale UML must never override approved requirements; flag any UML that
+  conflicts with the approved story or design.
+- Reuse valid UML where possible.
+- Create or update UML only when it materially helps explain multi-actor
+  interactions, important sequencing, alternative or exception flows, state
+  transitions, non-obvious component/service interaction, or an approved shared
+  architecture change.
+- Prefer just-enough UML. Sequence diagrams are appropriate for
+  interaction-heavy workflows.
+- Do not duplicate `docs/architecture/database_schema.md` in UML.
+- If UML represents a Human Gate 3 shared architecture decision, update it only
+  after that design is approved.
+- Story-level UML that does not alter shared architecture may be updated after
+  the relevant story and functional-test requirements are approved.
+- Keep UML consistent with the final approved implementation.
 
-Clarification needed:
-<specific question>
-```
+Do not introduce a separate UML approval gate.
 
-Minor implementation choices that do not alter requirements may be decided normally.
+For every approved Acceptance Criterion classify readiness as one or more of:
 
----
+- READY WITH CURRENT ARCHITECTURE
+- REQUIRES SHARED SCHEMA CHANGE
+- REQUIRES RLS / PERMISSION CHANGE
+- REQUIRES STATUS / CONSTRAINT CHANGE
+- REQUIRES SHARED ROLE CHANGE
+- REQUIRES SHARED WORKFLOW DECISION
+- REQUIRES ANOTHER STORY / DEPENDENCY
 
-# 6. IMPLEMENTATION SCOPE
+## Schema and RLS Principle
 
-Implement only behaviour required by the assigned user story.
+The current database must not steer or weaken an approved customer requirement.
+If approved behaviour cannot be represented correctly, do not:
 
-Do not add functionality merely because:
+- overload an unrelated column;
+- hard-code fake state;
+- store required persistent data only in frontend state;
+- invent an unsupported status;
+- bypass RLS;
+- create a hidden workaround; or
+- silently omit the Acceptance Criterion.
 
-- it seems useful
-- it may be needed in a future sprint
-- it is common in similar systems
-- the AI believes it is best practice
-- a downstream workflow exists
-- the prototype contains another feature nearby
-
-Dependencies may be used as existing preconditions.
-
-They do not automatically become implementation scope.
-
----
-
-# 7. SHARED APPLICATION FLOW
-
-ConnectSphere follows:
-
-```text
-Frontend
-    ↓
-Flask Route
-    ↓
-Service / Business Logic
-    ↓
-Supabase
-```
-
-New functionality should follow this structure where applicable.
-
----
-
-# 8. FLASK ROUTE RULES
-
-New Flask route modules belong in:
+Report each limitation using:
 
 ```text
-app/routes/
+Requirement:
+<approved behaviour>
+
+Current limitation:
+<current schema, RLS or shared limitation>
+
+Minimum shared change required:
+<high-level minimum change>
+
+Affected areas:
+<tables, policies, services and stories>
+
+Can unaffected implementation proceed independently?
+YES / PARTIALLY / NO
 ```
 
-Routes should generally:
+## Human Gate 3 - Shared Architecture Approval
 
-- receive the request
-- retrieve request data
-- perform basic input checks
-- call the relevant service
-- return an appropriate response
+This gate is required if any shared schema, RLS, status, role, constraint or
+workflow change is needed. Otherwise, record that no shared change is required
+and continue to Phase 4.
 
-Routes should not contain large amounts of business logic.
+When the gate is required, stop before implementing dependent behaviour.
+Prepare a concise proposal that the developer can forward directly to the team:
 
-Do not create a new Flask application instance for a user story.
+1. **Requirement affected** - identify the approved Acceptance Criterion or
+   customer requirement.
+2. **Current limitation** - explain why the current schema, RLS or shared
+   architecture cannot support it correctly.
+3. **Proposed minimum shared change** - state the smallest required change
+   without redesigning unrelated architecture.
+4. **Rationale** - explain why the change is necessary and why a workaround
+   would be incorrect or unsafe.
+5. **Affected areas** - list tables, columns, constraints, RLS, roles, services,
+   stories and tests.
+6. **Risks / compatibility impact** - identify existing behaviour, migration or
+   data concerns.
+7. **Cross-story impact** - identify other developers or stories that may
+   depend on the shared change.
 
-Reuse the existing application.
+Wait for the developer to return with the team's explicit decision.
 
-If route registration is required, integrate it with the current Flask application structure using the smallest appropriate change.
+### Rejected or Modified Proposal
 
----
+If rejected:
 
-# 9. SERVICE-LAYER RULES
+- do not implement the proposed shared change;
+- identify the blocked Acceptance Criterion; and
+- stop for further instruction.
 
-Business logic belongs in:
+If modified, use only the team's approved design. Restate the final approved
+design before proceeding; do not continue with the original proposal.
+
+### Approved Proposal and Execution Instructions
+
+Team approval does not mean the change has already been applied. First provide
+exact execution instructions for the approved design. Where applicable include:
+
+- SQL statements or migration commands
+- Supabase SQL Editor steps
+- RLS policy SQL
+- constraint changes
+- data-backfill steps
+- role or configuration changes
+- exact repository files that must later be updated
+- verification queries or checks
+
+Use the repository's approved migration workflow when one exists. If no
+migration/versioning convention exists, say so and use only the team-approved
+execution approach. Do not expand the approved scope.
+
+### Developer Execution Checkpoint
+
+After providing instructions, stop and ask the developer to perform the shared
+change. Do not continue until the developer explicitly confirms completion,
+for example `Done`, `Schema updated` or `RLS policy applied`.
+
+If the developer reports an error, diagnose only the approved shared change.
+Do not resume the story workflow yet.
+
+### Verification and Database Documentation
+
+After confirmation, verify the change where tools or evidence allow, for
+example by inspecting an approved migration, supplied schema export, SQL
+output, verification query, constraint/RLS policy, or comparison with
+`docs/architecture/database_schema.md`.
+
+If direct verification is unavailable, request the minimum evidence needed or
+state clearly that live verification could not be independently performed. Do
+not claim verification without evidence.
+
+For an approved and actually applied shared schema, RLS, status or constraint
+change, one designated developer/shared-change owner must:
+
+1. apply the team-approved change;
+2. verify it where possible;
+3. update `docs/architecture/database_schema.md` immediately to the resulting
+   approved and current structure; and
+4. commit the shared change according to the team's agreed migration process.
+
+Other affected story branches must consume, pull or rebase against that shared
+change rather than independently recreating or documenting it. If several
+stories depend on the same change, they must not each apply it.
+
+Do not document speculative or unapplied schema changes.
+
+Resume the story only after team approval, developer execution, verification
+or an explicit verification limitation, and required shared documentation are
+complete.
+
+## Shared Baseline Synchronisation Rule
+
+### Individual Story Branches
+
+Individual story branches may update their own canonical artifacts where
+applicable:
+
+- `docs/user-stories/<story-name>.md`
+- `docs/test-cases/<story-name>.md`
+- relevant story-level UML
+- relevant runtime files
+- relevant pytest files
+
+They must not normally modify `docs/architecture/project_context.md` or
+`docs/architecture/common_structure.md` merely because an approved story
+changes a shared project fact. Parallel story branches editing those shared
+baseline files create unnecessary merge conflicts and inconsistent baseline
+edits.
+
+### Shared Baseline Update Required
+
+If an approved story changes a project-wide business rule, role responsibility,
+shared workflow, service/domain responsibility or cross-story system fact, do
+not automatically update the shared baseline files from the ordinary story
+branch. Instead record this item in the story completion report:
 
 ```text
-app/services/
+## Shared Baseline Update Required
+
+Affected document:
+<docs/architecture/project_context.md or docs/architecture/common_structure.md>
+
+Current shared rule/fact:
+<current baseline wording>
+
+Approved replacement:
+<approved wording>
+
+Origin:
+<story and approved requirement>
+
+Why reconciliation is required:
+<why the shared baseline needs later synchronisation>
 ```
 
-Service logic may include:
-
-- business-rule validation
-- workflow decisions
-- permission-related business checks where applicable
-- interaction with Supabase
-- processing application data
-- determining permitted state transitions
-
-Keep story-specific logic focused.
-
-Do not create unnecessary abstraction layers.
-
-Do not introduce repositories, managers, factories, adapters or other layers unless the existing project genuinely requires them.
-
----
-
-# 10. SUPABASE RULES
-
-Reuse:
-
-```python
-create_supabase_client()
-```
-
-from:
+Example:
 
 ```text
-app/supabase_client.py
-```
-
-Do not create duplicate Supabase configuration.
-
-Do not hard-code:
-
-```text
-Supabase URL
-Supabase publishable key
-passwords
-access tokens
-test-user credentials
-```
-
-Do not use a service-role key unless explicitly approved by the team.
-
----
-
-# 11. DATABASE RULES
-
-Use the existing live Supabase schema.
-
-Current application tables are:
-
-```text
-profile
-user_role
-event
-event_action_log
-event_change_request
-event_coordinator_reassignment
-venue
-venue_booking
-venue_block
-equipment
-equipment_reservation
-equipment_unavailability
-registration
-notification
-```
-
-Use these exact current table names.
-
-Older plural table names may appear in historical SQL or documentation.
-
-Do not use the old names in new application code.
-
-Do NOT independently:
-
-- create a new table
-- rename a table
-- add a column
-- remove a column
-- alter relationships
-- change constraints
-- add a new status value
-- remove a status value
-
-If the assigned story genuinely appears to require a schema change, stop and flag it for team review.
-
----
-
-# 12. STATUS VALUE RULE
-
-Use only existing approved status values.
-
-Do not invent convenient statuses.
-
-For example, do not introduce values such as:
-
-```text
-Pending Review
-Submitted
-Approved
-Processing
-In Progress
-```
-
-unless they are actually supported by the shared project context.
-
-Use:
-
-```text
+Affected document:
 docs/architecture/project_context.md
+
+Current shared rule:
+Submitted events are automatically assigned to an Event Coordinator.
+
+Approved replacement:
+Submitted events enter the unassigned queue and are assigned by the Event
+Coordinator Lead.
+
+Origin:
+<story / approved requirement>
 ```
 
-to confirm existing status values.
+Carry this item into the end-of-sprint baseline synchronisation task. Deferring
+the shared-document update does not mean the approved story requirement is
+incomplete.
+
+### End-of-Sprint / Integration Baseline Sync
+
+Synchronise `docs/architecture/project_context.md` through a dedicated shared
+baseline task after the relevant approved stories have been merged. Update
+`docs/architecture/common_structure.md` only when architecture or repository
+navigation genuinely changed.
+
+The baseline-sync task reviews:
+
+- stories merged during the sprint;
+- approved customer requirement changes;
+- approved Human Gate 3 decisions;
+- shared roles and workflows that changed; and
+- the existing `project_context.md` and `common_structure.md` content.
+
+It proposes the minimum required shared-document updates. Human/team review is
+required before the shared baseline-sync commit. If no shared baseline facts
+changed during the sprint, no baseline-document change is required.
+
+Do not automatically create this end-of-sprint commit from an individual story
+workflow.
 
 ---
 
-# 13. ROW LEVEL SECURITY
+# Phase 4 - Story Implementation
 
-Existing Supabase Row Level Security must be respected.
+After every applicable gate is cleared, implement only the approved assigned
+story.
 
-Do not:
+## Architecture and Scope Rules
 
-- disable RLS
-- bypass RLS
-- use privileged credentials to avoid RLS
-- weaken access restrictions
-- replace the current access model
+- Follow `Frontend -> Flask Route -> Service / Business Logic -> Supabase`.
+- Put routes in `app/routes/` and business logic in `app/services/`.
+- Reuse `app/supabase_client.py`; do not create duplicate Supabase setup.
+- Use the current approved/documented database structure in
+  `docs/architecture/database_schema.md`.
+- Reuse existing authentication; do not create a separate identity mechanism.
+- Respect RLS and never use a service-role bypass unless explicitly approved.
+- Reuse the established shared frontend, layout and interaction patterns.
+- Do not redesign unrelated UI or replace shared frontend files wholesale.
+- Do not create a separate Flask application.
+- Do not introduce unnecessary repositories, managers, factories, adapters or
+  other abstraction layers.
+- Keep shared-file changes minimal and coordinate approved shared work.
+- Do not perform unrelated refactoring, formatting, renaming or restructuring.
+- Do not add or upgrade dependencies unless the story genuinely requires it.
+- Do not hard-code secrets, credentials, tokens or test-user passwords.
+- Follow all repository-integrity protections in `AGENTS.md`.
 
-simply to make the user story easier to implement.
+The frontend prototype is a visual and interaction baseline, not a source of
+new requirements. Replace mock behaviour only where the approved story requires
+it.
 
-If RLS prevents behaviour that the confirmed story genuinely requires, identify the mismatch and raise it with the team.
+Routes should handle request input and response concerns while delegating
+business decisions to services. Implement clear, scoped error handling without
+exposing internal exceptions or secrets.
 
----
-
-# 14. AUTHENTICATION
-
-Authentication uses Supabase Authentication.
-
-Do not introduce:
-
-- Flask-Login
-- custom password storage
-- a second authentication database
-- another identity provider
-- a separate login mechanism
-
-unless explicitly approved.
-
-Reuse the existing authentication approach.
-
-The existing login implementation may remain in:
-
-```text
-app/app.py
-```
-
-until the authentication story intentionally refactors it.
-
-Do not refactor working authentication code merely for architectural neatness while implementing an unrelated story.
+If implementation reveals a new requirement conflict or shared dependency,
+stop and return to the appropriate human gate. Do not silently widen scope.
 
 ---
 
-# 15. FRONTEND BASELINE
+# Phase 5 - Automated Tests
 
-The approved shared frontend is:
+Review existing pytest coverage after implementation:
 
 ```text
-app/templates/index.html
-app/static/css/styles.css
-app/static/js/app.js
+NEW behaviour
+-> add automated tests where meaningful
+
+CHANGED behaviour
+-> update or replace affected tests
+
+REMOVED / SUPERSEDED behaviour
+-> remove obsolete tests when justified
+
+UNCHANGED behaviour
+-> preserve valid existing tests
 ```
 
-Use the existing ConnectSphere:
+Do not mechanically map one functional test case to one pytest test. Prioritise:
 
-- layout
-- navigation
-- styling
-- role-based screens
-- cards
-- forms
-- modal patterns
-- interaction style
+- happy paths
+- meaningful negative cases
+- genuine boundaries
+- conflicts
+- authorisation
+- state transitions
+- story-related regressions
 
-Do not create a separate frontend application.
-
-Do not replace the existing design system.
-
-Do not rewrite shared frontend files wholesale for one user story.
+Avoid Cartesian-product parametrisation unless combinations provide genuinely
+different behavioural coverage. Mocks and fixtures must reflect the approved
+schema shape. Passing obsolete tests is not success.
 
 ---
 
-# 16. FRONTEND CONFLICT CONTROL
+# Phase 6 - Traceability
 
-The following are shared files:
+Before completion, produce:
 
 ```text
-app/templates/index.html
-app/static/css/styles.css
-app/static/js/app.js
+Acceptance Criterion
+-> Functional Test Case(s)
+-> Automated pytest evidence or Manual Evidence
 ```
 
-Multiple developers may modify them in parallel.
+Account for every Acceptance Criterion. Distinguish clearly between:
 
-Therefore:
+- automated test executed and passed;
+- implementation supports the behaviour but manual verification is required;
+  and
+- Acceptance Criterion blocked or not satisfied.
 
-- make the smallest practical frontend change
-- avoid unrelated formatting changes
-- avoid reorganising large sections unnecessarily
-- avoid renaming shared functions without need
-- avoid moving code purely for style preference
-- coordinate with the team before large structural changes
-
-Where practical, keep story-specific additions isolated.
+Do not claim execution or automated evidence that did not occur.
 
 ---
 
-# 17. PROTOTYPE RULE
+# Phase 7 - Verification
 
-The current frontend is a light prototype.
-
-Some behaviour is:
-
-- mocked
-- hard-coded
-- incomplete
-- only present for demonstration
-
-Do not treat prototype behaviour as a confirmed business requirement.
-
-When implementing a story:
-
-```text
-Confirmed requirement
-> prototype mock behaviour
-```
-
-Replace mock behaviour only where required by the current story.
-
-Do not attempt to convert the entire prototype into production functionality at once.
-
----
-
-# 18. VISUAL CONSISTENCY
-
-Maintain the approved ConnectSphere Clay & Linen design.
-
-Current shared visual baseline includes:
-
-```text
-Clay        #783A32
-Linen       #EEE0CC
-Warm Ivory  #FAF5EE
-Soft Cream  #FFFDF9
-Pale Clay   #F2E4D6
-Espresso    #453329
-```
-
-Typography:
-
-```text
-Headings: Georgia
-Body / navigation / buttons / labels: Arial
-```
-
-New user-story interfaces should fit the existing frontend instead of introducing another visual system.
-
----
-
-# 19. FUNCTIONAL TEST CASES
-
-Use the approved functional test cases under:
-
-```text
-docs/test-cases/<relevant-story>.md
-```
-
-to guide implementation verification.
-
-The implementation should collectively satisfy the approved test behaviours.
-
-Do not blindly implement a test case if it conflicts with a higher-priority confirmed requirement.
-
-If such a conflict exists, flag it.
-
----
-
-# 20. AUTOMATED TESTING
-
-Add or update automated pytest tests where appropriate for the story.
-
-Automated tests belong under:
-
-```text
-tests/
-```
-
-Functional test specifications under:
-
-```text
-docs/test-cases/
-```
-
-are NOT the same as pytest files.
-
-Do not mechanically create one pytest test for every functional test case.
-
-Create automated tests where they provide meaningful verification of the implemented behaviour.
-
-Do not delete existing passing tests merely to make a new implementation pass.
-
-If an existing test is obsolete because approved behaviour has changed, update it to reflect the current requirement.
-
----
-
-# 21. TESTING REQUIREMENT
-
-Before considering implementation complete, run:
+Run relevant targeted tests first. Then run:
 
 ```bash
-python -m pytest
+python scripts/validate_structure.py
+python scripts/validate_docs.py
+python scripts/project_health.py
 ```
 
-Existing tests must continue to pass unless an approved requirement change legitimately requires a test update.
+`project_health.py` already runs the full regression suite. Do not run a
+duplicate full pytest command unless it is useful for diagnosis.
 
-Where practical, also verify the relevant user workflow manually through the Flask application.
-
----
-
-# 22. ERROR HANDLING
-
-Implement error handling only where supported or reasonably necessary for the assigned behaviour.
-
-Do not invent extensive validation frameworks.
-
-Error behaviour should be:
-
-- clear
-- observable
-- consistent with the story
-- scoped to the feature
-
-Avoid exposing internal exceptions or secrets to users.
+If a check fails because of the story, fix only the story-related issue and
+rerun it. If a failure is unrelated or pre-existing, stop and report it instead
+of changing unrelated code.
 
 ---
 
-# 23. SECURITY
+# Phase 8 - Final Diff Review
 
-Never commit:
+Before committing:
+
+- inspect `git status` and the final diff;
+- confirm only story-related or approved shared files changed;
+- confirm no unrelated tracked file was deleted, renamed or moved;
+- confirm no secrets were introduced;
+- confirm every human gate was explicitly approved;
+- confirm any schema/RLS change matches the approved design;
+- confirm `docs/architecture/database_schema.md` was updated if an approved
+  schema change was implemented; and
+- confirm obsolete tests were not retained only because they previously passed.
+
+---
+
+# Phase 9 - Commit
+
+Commit only if:
+
+- all required human gates are cleared;
+- required validation passes; and
+- no unrelated working-tree changes are present.
+
+Then:
+
+1. Stage only approved story-related files.
+2. Create one coherent final story/task commit.
+3. Do not push.
+
+Choose a concise conventional commit message after understanding the completed
+change, for example:
 
 ```text
-.env
-Supabase keys
-Passwords
-Access tokens
-Test-account credentials
-Private secrets
+feat: implement <story-name>
+fix: reconcile <story-name> workflow
+docs: reconcile <story-name>
 ```
 
-Do not print sensitive credentials into:
+After committing, report:
+
+- commit SHA
+- commit message
+- files included
+- story implemented or reconciled
+- validation results
+- Acceptance Criterion -> functional test -> automated/manual traceability
+- schema, RLS or other shared changes used
+- known limitations or dependencies
+
+Where applicable, include this separate field:
 
 ```text
-logs
-test output
-responses
-documentation
-Git commits
+Shared Baseline Update Required:
+- None
 ```
 
-Use environment variables for configuration.
-
----
-
-# 24. MINIMAL-CHANGE RULE
-
-Prefer the smallest coherent implementation.
-
-Do not perform unrelated:
-
-- refactoring
-- formatting
-- renaming
-- folder restructuring
-- dependency upgrades
-- architecture changes
-- frontend redesign
-- database changes
-
-while implementing the assigned story.
-
-A Pull Request should be easy for another team member to understand and review.
-
----
-
-# 25. DEPENDENCY RULE
-
-Before installing a new Python package, determine whether the story can reasonably be implemented using the current dependencies.
-
-Do not add packages unnecessarily.
-
-If a new dependency is genuinely required:
-
-- explain why
-- update `requirements.txt`
-- keep the change within story scope
-
-Do not replace existing libraries simply because another library is preferred.
-
----
-
-# 26. USER STORY DOCUMENTATION
-
-If implementation reveals an important approved implementation decision relevant to the story, it may be recorded under:
+or:
 
 ```text
-## Implementation Notes
+Shared Baseline Update Required:
+- <document and approved shared fact needing end-of-sprint reconciliation>
 ```
 
-in the relevant user-story document.
-
-Do not turn the story document into a development diary.
-
-Only record information that another developer or reviewer genuinely needs.
+Do not push.
 
 ---
 
-# 27. UML
-
-Use existing relevant UML when provided.
-
-Do not change UML merely to match code after making an unsupported design decision.
-
-If implementation legitimately changes an approved story-level design, update the relevant UML so documentation and implementation remain consistent.
-
-Do not create unnecessary diagrams.
-
----
-
-# 28. FILE MODIFICATION DISCIPLINE
-
-Before editing:
-
-- inspect the current file
-- understand existing behaviour
-- preserve unrelated working functionality
-
-Do not replace entire files when a small targeted edit is sufficient.
-
-If providing code in chat rather than directly editing the repository:
-
-- clearly state the exact file path
-- provide complete replacement files when that is safer for the user
-- do not omit required imports or surrounding code
-
----
-
-# 29. IMPLEMENTATION SEQUENCE
-
-Use this sequence:
-
-```text
-1. Understand story scope
-2. Review test cases
-3. Review dependencies
-4. Review relevant UML
-5. Inspect existing implementation
-6. Identify required files
-7. Implement route changes
-8. Implement service/business logic
-9. Integrate Supabase
-10. Integrate required frontend behaviour
-11. Add/update automated tests where appropriate
-12. Run pytest
-13. Verify Acceptance Criteria
-14. Review changed files
-15. Summarise implementation
-```
-
-Skip steps that genuinely do not apply.
-
----
-
-# 30. ACCEPTANCE CRITERIA CHECK
-
-Before declaring the story complete, explicitly verify every Acceptance Criterion.
-
-Use:
-
-```text
-AC1 — Satisfied / Not Satisfied
-Evidence: <implemented behaviour or test>
-
-AC2 — Satisfied / Not Satisfied
-Evidence: <implemented behaviour or test>
-```
-
-Do not claim an Acceptance Criterion is satisfied unless the implementation actually supports it.
-
-If an AC remains incomplete, state that clearly.
-
----
-
-# 31. FUNCTIONAL TEST CASE CHECK
-
-Also verify the approved functional test cases.
-
-Use:
-
-```text
-TC-001 — Supported / Not Supported
-TC-002 — Supported / Not Supported
-...
-```
-
-Do not fabricate test execution results.
-
-If the test was not actually executed, distinguish:
-
-```text
-Implementation supports expected behaviour
-```
-
-from:
-
-```text
-Test executed and passed
-```
-
----
-
-# 32. FINAL CODE REVIEW CHECK
-
-Before completion, confirm:
-
-- implementation remains within the user-story scope
-- requirements were not invented
-- confirmed clarifications were followed
-- existing database tables were reused
-- current table names were used
-- no unapproved status value was added
-- RLS was not bypassed
-- existing authentication was reused
-- route/service structure was followed where applicable
-- frontend design remains consistent
-- unrelated mock functionality was not unnecessarily replaced
-- unrelated files were not refactored
-- secrets were not introduced
-- relevant automated tests were added or updated where appropriate
-- existing tests still pass
-- each Acceptance Criterion has been checked
-
----
-
-# 33. FINAL RESPONSE FORMAT
-
-After implementation, provide a concise implementation summary using:
-
-```text
-## Story Implemented
-
-<User Story Title>
-
-## Files Changed
-
-- <file path> — <what changed>
-- <file path> — <what changed>
-
-## Implementation Summary
-
-<brief description of how the story was implemented>
-
-## Acceptance Criteria Check
-
-- AC1 — Satisfied / Not Satisfied
-- AC2 — Satisfied / Not Satisfied
-- AC3 — Satisfied / Not Satisfied
-
-## Functional Test Case Check
-
-- TC-001 — Supported / Not Supported
-- TC-002 — Supported / Not Supported
-
-## Automated Testing
-
-Command run:
-
-python -m pytest
-
-Result:
-
-<actual result>
-
-## Open Issues
-
-- <only include if something remains unresolved>
-```
-
-Do not claim tests passed unless they were actually executed.
-
-Do not hide incomplete Acceptance Criteria.
-
----
-
-# 34. IF DIRECT REPOSITORY EDITING IS AVAILABLE
-
-If you have tools that allow you to inspect and edit the repository directly:
-
-1. inspect the existing relevant files first
-2. make the required edits
-3. avoid unrelated changes
-4. run the available tests
-5. report the actual files changed and actual test results
-
-Do not merely describe code that could be written when you are able to implement it directly.
-
----
-
-# 35. IF DIRECT REPOSITORY EDITING IS NOT AVAILABLE
-
-If you cannot edit the repository directly:
-
-- provide exact file paths
-- explain which files need modification
-- provide complete code where practical
-- preserve the current project structure
-- do not assume unprovided file contents
-
-If an existing file is required but has not been supplied, request or inspect it before replacing it.
-
----
-
-# 36. STORY INPUT
-
-Implement the user story contained in:
-
-```text
-docs/user-stories/<relevant-story>.md
-```
-
-using the approved test specification:
-
-```text
-docs/test-cases/<relevant-story>.md
-```
-
-and relevant UML if applicable.
+# Blocked Work Rule
+
+If work is blocked after Human Gate 2 because a required shared decision is not
+approved, do not pretend the story is complete, implement hacks, or create the
+final implementation commit. A documentation-only checkpoint commit may be
+created only when the developer explicitly requests it. Report the blocker and
+stop.
+
+# Cross-Story Boundary
+
+If another developer's story is affected:
+
+1. identify the affected story and the exact dependency;
+2. record what the current story needs from it;
+3. hand the impact to that story's owner; and
+4. stop at that boundary for the other story.
+
+Do not update the other story's canonical requirements or tests, start its human
+gates, design its database changes, or implement its runtime merely because the
+current story depends on it. Never recursively start a second story from inside
+this workflow.
+
+If the dependency blocks the current story, report the blocked Acceptance
+Criterion and stop or continue only the independently safe portion. Shared
+dependencies may be designed or implemented here only when the team explicitly
+assigns and approves them as shared work.
+
+# Direct Repository Editing
+
+When repository-editing tools are available, inspect before editing, make the
+smallest coherent change, run the actual checks and report actual results. Do
+not merely describe hypothetical changes.
+
+If editing tools are unavailable, provide exact paths and required changes
+without inventing unseen file contents.
+
+# End State
+
+A story is complete only when:
+
+- the canonical User Story and Acceptance Criteria are approved;
+- the canonical functional test specification is approved;
+- required shared architecture decisions are approved;
+- implementation matches approved requirements;
+- automated tests are updated appropriately;
+- obsolete behaviour and tests are removed where required;
+- traceability is complete;
+- required project health checks pass;
+- the final diff is reviewed;
+- one coherent commit is created; and
+- human Pull Request review can proceed.
 
 ==================================================
-END OF IMPLEMENTATION PROMPT
+END OF PRIMARY STORY WORKFLOW
 ==================================================

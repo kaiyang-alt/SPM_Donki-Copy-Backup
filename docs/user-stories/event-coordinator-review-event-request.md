@@ -27,3 +27,7 @@ After the Event Organiser provides the required clarification/amendments, the Ev
 - Organiser responses leave the event in `changes_requested` until coordinator review.
 - Event updates, audit entries, and notifications use separate authenticated Supabase calls under existing RLS. A partial failure is reported explicitly; these writes are not an atomic database transaction.
 
+## Test Case Reference
+
+`docs/test-cases/event-coordinator-review-event-request.md`
+

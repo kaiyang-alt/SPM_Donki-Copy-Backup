@@ -52,103 +52,43 @@ A user may hold more than one role.
 
 ```text
 SPM_Donki/
-│
 ├── app/
-│   ├── app.py
-│   ├── supabase_client.py
 │   ├── routes/
 │   ├── services/
+│   ├── static/
 │   ├── templates/
-│   └── static/
-│
+│   ├── app.py
+│   └── supabase_client.py
 ├── docs/
 │   ├── architecture/
-│   │   ├── common_structure.md
-│   │   └── project_context.md
-│   │
+│   ├── requirements/
 │   ├── user-stories/
-│   │   ├── README.md
-│   │   └── <story-name>.md
-│   │
 │   ├── test-cases/
-│   │   ├── README.md
-│   │   ├── functional-test-case-prompt.md
-│   │   └── <story-name>.md
-│   │
 │   ├── implementation/
-│   │   └── user-story-implementation-prompt.md
-│   │
 │   └── uml/
-│       ├── README.md
-│       └── <story-diagram>.md
-│
+├── scripts/
 ├── tests/
 ├── .github/
 ├── .env.example
 ├── .gitignore
 ├── AGENTS.md
-├── README.md
-└── requirements.txt
-
-```text
-SPM_Donki/
-│
-├── app/
-│   ├── app.py
-│   ├── supabase_client.py
-│   ├── routes/
-│   ├── services/
-│   ├── templates/
-│   └── static/
-│
-├── docs/
-│   ├── architecture/
-│   │   ├── common_structure.md
-│   │   └── project_context.md
-│   ├── uml/
-│   └── user-stories/
-│
-├── tests/
-├── .github/
-├── .env.example
-├── .gitignore
-├── AGENTS.md
+├── pytest.ini
 ├── README.md
 └── requirements.txt
 ```
 
-## Shared Project Context
+## Documentation Map
 
-Detailed information about the current ConnectSphere architecture, database, status values, business rules, Supabase setup, frontend baseline and development decisions is documented in:
-
-```text
-docs/architecture/project_context.md
-```
-
-Developers and AI coding agents should review this file before implementing a user story.
-
-The concise architecture and service-ownership reference is located at:
-
-```text
-docs/architecture/common_structure.md
-```
-
-## Shared Development Instructions
-
-Development and AI-agent rules are documented in:
-
-```text
-AGENTS.md
-```
-
-These instructions cover areas such as:
-
-- frontend consistency
-- route and service structure
-- database restrictions
-- Git workflow
-- security
-- user-story scope
+| Document / Area | Purpose |
+| --- | --- |
+| `AGENTS.md` | Development and AI-agent guardrails |
+| `docs/requirements/README.md` | Requirement precedence and customer-change process |
+| `docs/architecture/common_structure.md` | Quick architecture and repository reference |
+| `docs/architecture/project_context.md` | Current reconciled shared project baseline |
+| `docs/architecture/database_schema.md` | Current approved/documented database structure |
+| `docs/user-stories/` | Canonical User Story cards |
+| `docs/test-cases/` | Functional test specifications |
+| `docs/implementation/user-story-implementation-prompt.md` | Primary AI-assisted story workflow and orchestration entry point |
 
 ## Local Setup
 
@@ -247,130 +187,6 @@ Development should follow:
 Frontend → Flask Route → Service / Business Logic → Supabase
 ```
 
-General rules:
-
-- New Flask routes belong in `app/routes/`
-- Business logic belongs in `app/services/`
-- Reuse the existing Supabase client
-- Reuse the approved ConnectSphere frontend baseline
-- Keep changes within the assigned story where possible
-- Do not commit directly to `main`
-- Test before opening a Pull Request
-- Human review is required before merge
-
-## User Story Documentation
-
-Story-specific implementation context belongs in:
-
-```text
-docs/user-stories/
-```
-
-A story document may contain:
-
-- User Story
-- Acceptance Criteria
-- Test Cases
-- Relevant Customer Clarifications
-- Preconditions / Dependencies
-- Relevant UML reference
-
-## UML
-
-Relevant UML belongs in:
-
-```text
-docs/uml/
-```
-
-Use just-enough UML where it helps clarify implementation.
-
-Sequence diagrams are useful where interaction order or alternative flows matter.
-
-Class diagrams may be used where code-level structure needs clarification.
-
-## Shared AI Prompts
-
-ConnectSphere uses two shared AI prompts to keep development consistent across the team.
-
-### Functional Test Case Design
-
-Use:
-
-```text
-docs/test-cases/functional-test-case-prompt.md
-```
-
-This prompt is used before implementation to derive functional test cases from the approved user story, acceptance criteria and relevant customer clarifications.
-
-The completed functional test specification should be stored under:
-
-```text
-docs/test-cases/<story-name>.md
-```
-
-### User Story Implementation
-
-Use:
-
-```text
-docs/implementation/user-story-implementation-prompt.md
-```
-
-This prompt is used after the story requirements and functional test cases have been reviewed.
-
-It instructs the AI to implement only the assigned user story while following the existing ConnectSphere architecture, database, RLS, authentication and frontend rules.
-
-## AI Coding Context
-
-Different team members may use different AI coding tools, but all AI agents should receive the same shared project context.
-
-### Test-Design Stage
-
-Provide:
-
-```text
-README.md
-AGENTS.md
-docs/architecture/project_context.md
-docs/user-stories/<relevant-story>.md
-docs/test-cases/functional-test-case-prompt.md
-Relevant UML, if applicable
-```
-
-The generated functional test specification should be reviewed by a human and stored in:
-
-```text
-docs/test-cases/<relevant-story>.md
-```
-
-### Implementation Stage
-
-Provide:
-
-```text
-README.md
-AGENTS.md
-docs/architecture/project_context.md
-docs/implementation/user-story-implementation-prompt.md
-docs/user-stories/<relevant-story>.md
-docs/test-cases/<relevant-story>.md
-Relevant UML, if applicable
-```
-
-The AI should implement only the assigned story and follow the shared ConnectSphere development rules.
-
-## Security
-
-Never commit:
-
-```text
-.env
-Supabase keys
-Passwords
-Access tokens
-Test-account credentials
-Other secrets
-```
-
-Use environment variables or approved private team channels for sensitive information.
+Use `AGENTS.md` for the full development, security, scope and repository-integrity
+rules. Test changes before opening a Pull Request, and obtain human review before
+merge.

@@ -16,6 +16,10 @@ AMENDABLE_FIELDS = {
     'technical_requirements',
 }
 
+APPROVAL_DEFAULT_MESSAGE = (
+    'Event request approved. Venue and resource booking may proceed.'
+)
+
 
 def _session(token):
     client = create_authenticated_supabase_client(token)
@@ -66,18 +70,26 @@ def get_review(token, event_id):
 def submit_review(token, event_id, payload):
     client, user_id = _session(token)
     target = payload.get('status')
-    if target not in {'changes_requested', 'planning'}:
-        raise ReviewError('Select Clarification Required or Planning.')
+    if target not in {'changes_requested', 'approved', 'rejected'}:
+        raise ReviewError('Select Request clarification, Approve, or Reject.')
     message = str(payload.get('message') or '').strip()
-    if target == 'changes_requested' and not message:
-        raise ReviewError('A clarification message is required.')
+    if target in {'changes_requested', 'rejected'} and not message:
+        requirement = 'clarification message' if target == 'changes_requested' else 'rejection feedback'
+        raise ReviewError(f'A {requirement} is required.')
     event = _event(client, user_id, event_id, coordinator=True)
     if event.get('status') not in {'requested', 'changes_requested'}:
         raise ReviewError('This event is no longer awaiting review.', 409)
+
+    action_types = {
+        'changes_requested': 'clarification_requested',
+        'approved': 'event_approved',
+        'rejected': 'event_rejected',
+    }
+    if target == 'approved' and not message:
+        message = APPROVAL_DEFAULT_MESSAGE
+
     return _record(client, user_id, event, {'status': target},
-                   'clarification_requested' if target == 'changes_requested' else 'review_completed',
-                   message or 'Event request reviewed; moved to planning.',
-                   event['organiser_id'] if target == 'changes_requested' else None)
+                   action_types[target], message, event['organiser_id'])
 
 
 def respond_to_review(token, event_id, payload):
