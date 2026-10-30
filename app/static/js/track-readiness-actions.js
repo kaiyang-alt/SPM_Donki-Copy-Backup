@@ -88,7 +88,7 @@
         '</section>'
       : '';
 
-    const canAttempt = eventStatus === 'planning';
+    const canAttempt = eventStatus === 'approved';
     const footer = '<p class="form-error" id="traError" role="alert" aria-live="polite">' + escapeHtml(state.error) + '</p>' +
       '<div class="form-actions"><button class="btn btn-outline" type="button" id="traBack">Back to assigned events</button>' +
       '<button class="btn btn-soft" type="button" id="traRefresh">Refresh readiness</button>' +

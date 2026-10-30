@@ -14,7 +14,7 @@ function formatDateTime(value) {
 function coordinatorEventRows() {
   if (!bookingContext.events.length) {
     return `<div class="empty-state">
-      <h3>No planning events</h3>
+      <h3>No approved events</h3>
       <p class="muted">No assigned events are currently eligible for venue booking.</p>
     </div>`;
   }
@@ -57,7 +57,7 @@ function coordinatorBookingRows() {
   if (!bookingContext.bookings.length) {
     return `<div class="empty-state">
       <h3>No venue requests</h3>
-      <p class="muted">Submit a venue request for an assigned planning event.</p>
+      <p class="muted">Submit a venue request for an assigned approved event.</p>
     </div>`;
   }
 
@@ -118,7 +118,7 @@ function venueBookingPage() {
   if (!eventOptions) {
     return `${heading}<section class="panel empty-state">
       <h3>No eligible events</h3>
-      <p class="muted">Only assigned events in planning status can request a venue.</p>
+      <p class="muted">Only assigned events in approved status can request a venue.</p>
     </section>`;
   }
 

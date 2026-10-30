@@ -4,6 +4,8 @@
 -- Adds no table, reservation status, authentication method or service-role client.
 -- Run the complete transaction as the trusted owner of the existing public tables.
 -- Do not reapply the earlier status-only patch after this migration.
+-- Existing deployments with venue alternatives must use the scoped priority
+-- patch instead: rerunning this historical migration replaces the venue checker.
 BEGIN;
 SELECT pg_advisory_xact_lock(212,8401);
 
@@ -30,7 +32,7 @@ BEGIN
 END;
 $constraints$;
 
--- Coordinator approval moves the event to planning before Technical Support
+-- Coordinator approval moves the event to approved before Technical Support
 -- receives requirements. No equipment row is required for this handoff.
 DO $policies$
 BEGIN
@@ -38,7 +40,7 @@ BEGIN
     CREATE POLICY "Technical support can review equipment requirements" ON public.event
     FOR SELECT TO authenticated USING (
       (technical_support_required IS TRUE OR nullif(btrim(technical_requirements),'') IS NOT NULL)
-      AND status IN ('planning','confirmed')
+      AND status IN ('approved','confirmed')
       AND EXISTS (SELECT 1 FROM public.user_role WHERE user_id=auth.uid() AND role='technical_support')
     );
   END IF;
@@ -67,7 +69,7 @@ END;
 $policies$;
 ALTER POLICY "Technical support can review equipment requirements" ON public.event
   TO authenticated USING (
-    status IN ('planning','confirmed')
+    status IN ('approved','confirmed')
     AND (technical_support_required IS TRUE OR nullif(btrim(technical_requirements),'') IS NOT NULL)
     AND EXISTS (SELECT 1 FROM public.user_role WHERE user_id=auth.uid() AND role='technical_support')
   );
@@ -157,7 +159,7 @@ BEGIN
   IF p_quantity_suggested IS NULL OR p_quantity_suggested <= 0 THEN RAISE EXCEPTION 'A positive suggested quantity is required'; END IF;
   PERFORM pg_advisory_xact_lock(212,8401);
   SELECT * INTO v_event FROM public.event WHERE event_id=p_event_id;
-  IF NOT FOUND OR (v_event.status IS NULL OR v_event.status NOT IN ('planning','confirmed')) OR (v_event.technical_support_required IS NOT TRUE AND nullif(btrim(v_event.technical_requirements),'') IS NULL)
+  IF NOT FOUND OR (v_event.status IS NULL OR v_event.status NOT IN ('approved','confirmed')) OR (v_event.technical_support_required IS NOT TRUE AND nullif(btrim(v_event.technical_requirements),'') IS NULL)
      OR NOT EXISTS(SELECT 1 FROM public.equipment WHERE equipment_id=p_equipment_id AND active IS TRUE) THEN
     RAISE EXCEPTION 'Equipment proposal is not eligible';
   END IF;
@@ -455,7 +457,7 @@ BEGIN
   IF NEW.technical_requirements IS DISTINCT FROM (SELECT technical_requirements FROM public.event WHERE event_id=NEW.event_id) THEN
     RAISE EXCEPTION 'Equipment proposal changed; reload before continuing';
   END IF;
-  IF NOT FOUND OR v_event_status IS NULL OR v_event_status NOT IN ('planning','confirmed') THEN
+  IF NOT FOUND OR v_event_status IS NULL OR v_event_status NOT IN ('approved','confirmed') THEN
     RAISE EXCEPTION 'Event is inaccessible or not eligible for equipment acceptance';
   END IF;
 
@@ -483,9 +485,14 @@ BEGIN
     IF NOT FOUND OR v_event_status IS NULL THEN
       RAISE EXCEPTION 'Cannot verify the event for an earlier equipment request';
     END IF;
-    IF v_event_status NOT IN ('planning','confirmed') THEN CONTINUE; END IF;
+    IF v_event_status NOT IN ('approved','confirmed') THEN CONTINUE; END IF;
     IF v_earlier.quantity_suggested IS NULL OR v_earlier.quantity_suggested <= 0 THEN
       RAISE EXCEPTION 'An earlier request has an invalid quantity';
+    END IF;
+    -- Unconfirmed proposals cannot claim provisional equipment stock.
+    IF NOT EXISTS (SELECT 1 FROM public.venue_booking
+      WHERE event_id = v_earlier.event_id AND status = 'confirmed') THEN
+      CONTINUE;
     END IF;
     IF public.cs_equipment_free_quantity(NEW.equipment_id,
          v_earlier.start_datetime,v_earlier.end_datetime,v_extra)
@@ -677,8 +684,13 @@ BEGIN
   FOR v_prior IN SELECT r.* FROM public.equipment_reservation r JOIN public.event e ON e.event_id=r.event_id
     WHERE r.equipment_id=v_row.equipment_id AND r.status='requested' AND r.requested_at<v_row.requested_at
       AND r.proposal_version>0 AND r.organiser_agreed_version=r.proposal_version
-      AND r.organiser_agreed_by=e.organiser_id AND e.status IN ('planning','confirmed') ORDER BY r.requested_at
+      AND r.organiser_agreed_by=e.organiser_id AND e.status IN ('approved','confirmed') ORDER BY r.requested_at
   LOOP
+    -- Unconfirmed proposals cannot claim provisional equipment stock.
+    IF NOT EXISTS (SELECT 1 FROM public.venue_booking
+      WHERE event_id = v_prior.event_id AND status = 'confirmed') THEN
+      CONTINUE;
+    END IF;
     IF public.cs_equipment_free_quantity(v_row.equipment_id,v_prior.start_datetime,v_prior.end_datetime,v_timeline)>=v_prior.quantity_suggested
        AND public.cs_equipment_schedule_fits(v_row.equipment_id,v_extra || jsonb_build_array(to_jsonb(v_prior))) THEN
       v_extra := v_extra || jsonb_build_array(to_jsonb(v_prior));

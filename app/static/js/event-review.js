@@ -100,7 +100,7 @@ function reviewPage() {
   if (!reviewData) return pageHead('Request unavailable', 'Refresh your events and try again.');
   const {event, actions, equipment} = reviewData;
   const coordinator = currentRole === 'coordinator';
-  const editable = coordinator ? ['requested', 'changes_requested'].includes(event.status) : event.status === 'changes_requested';
+  const editable = coordinator ? ['requested', 'planning', 'changes_requested'].includes(event.status) : event.status === 'changes_requested';
   const history = actions.filter(action => [
     'clarification_requested', 'clarification_provided', 'event_approved', 'event_rejected'
   ].includes(action.action_type));

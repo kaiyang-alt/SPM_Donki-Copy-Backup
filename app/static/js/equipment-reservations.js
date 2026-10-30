@@ -50,7 +50,7 @@
   function requestReview(item) {
     const r = item.reservation, id = r.reservation_id, check = checks[id];
     const agreed = r.proposal_version > 0 && r.organiser_agreed_version === r.proposal_version && r.organiser_agreed_by && r.organiser_agreed_at;
-    const eligible = r.status === 'requested' && ['planning', 'confirmed'].includes(item.event.status);
+    const eligible = r.status === 'requested' && ['approved', 'confirmed'].includes(item.event.status);
     const availability = !check
       ? {kind: 'neutral', title: 'Availability not checked', text: 'Check current stock and scheduling before acceptance. Earlier requests retain priority.'}
       : check.error
@@ -94,7 +94,7 @@
   };
 
   function proposalForm(event, row = null) {
-    if (!['planning', 'confirmed'].includes(event.status)) return '<p class="notice">Submitted requirements received. Equipment proposals can be saved after Coordinator review moves the event to planning.</p>';
+    if (!['approved', 'confirmed'].includes(event.status)) return '<p class="notice">Submitted requirements received. Equipment proposals can be saved after Coordinator review moves the event to approved.</p>';
     if (!catalogue.length) return '<p class="muted">Refresh to load the active equipment catalogue before making a proposal.</p>';
     const confirmedBookings = (event.venue_booking || []).filter(b => b.status === 'confirmed');
     const booking = confirmedBookings.length === 1 ? confirmedBookings[0] : null;
@@ -197,7 +197,7 @@
     }
     if (currentPage === 'equipment' && !isDetail) content = operationalCatalogue() + content;
     if (confirmation) content = `<section class="panel" role="status" style="margin-bottom:20px"><h2>Equipment reservation confirmed</h2>${details(confirmation)}<p class="muted">Saved status: ${escapeHtml(confirmation.reservation.status)}</p>` +
-      (confirmation.event.status === 'planning' ? '<p class="notice">The reservation is available to the assigned Coordinator under Event Readiness for final approval. The event remains in planning until the Coordinator confirms that all arrangements are ready.</p>' : '') + '</section>' + content;
+      (confirmation.event.status === 'approved' ? '<p class="notice">The reservation is available to the assigned Coordinator under Event Readiness for final approval. The event remains approved until the Coordinator confirms that all arrangements are ready.</p>' : '') + '</section>' + content;
     const back = isDetail || currentPage === 'equipmentevent' ? '<button class="btn btn-soft" id="equipmentBack">Back to requests</button>' : '';
     return pageHead(title, 'Review organiser requirements, propose quantities, and reserve agreed equipment.',
       `${back}<button class="btn btn-soft" id="equipmentRefresh" ${busy ? 'disabled' : ''}>Refresh</button>`) +
@@ -220,9 +220,9 @@
         // independently loaded inbox.
         const results = await Promise.allSettled([request(''), request('/context'), request('/catalogue')]);
         if (!current(generation)) return;
-        rows = results[0].status === 'fulfilled' ? results[0].value.requests.filter(item => ['planning', 'confirmed'].includes(item.event.status)) : [];
+        rows = results[0].status === 'fulfilled' ? results[0].value.requests.filter(item => ['approved', 'confirmed'].includes(item.event.status)) : [];
         const context = results[1].status === 'fulfilled' ? results[1].value : {};
-        events = (context.events || []).filter(event => ['planning', 'confirmed'].includes(event.status)); catalogue = context.equipment || [];
+        events = (context.events || []).filter(event => ['approved', 'confirmed'].includes(event.status)); catalogue = context.equipment || [];
         catalogueItems = results[2].status === 'fulfilled' ? results[2].value.equipment || [] : [];
         error = results.filter(result => result.status === 'rejected').map(result => result.reason.message).join(' ');
       }

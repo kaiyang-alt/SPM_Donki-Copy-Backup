@@ -15,7 +15,7 @@ USER_ROLE_TABLE = "user_role"
 COORDINATOR_ROLE = "event_coordinator"
 
 # Existing approved status values only (project_context.md sections 5 and 6).
-EVENT_STATUS_PLANNING = "planning"      # only status from which an event can be confirmed
+EVENT_STATUS_APPROVED = "approved"      # only status from which an event can be confirmed
 EVENT_STATUS_CONFIRMED = "confirmed"
 VENUE_BOOKING_CONFIRMED = "confirmed"
 VENUE_BOOKING_INACTIVE = {"rejected", "cancelled"}
@@ -243,7 +243,7 @@ def _build_readiness(client, event, today):
     return {
         "event": _event_summary(event),
         "readiness": READINESS_READY if ready else READINESS_INCOMPLETE,
-        "can_confirm": ready and event.get("status") == EVENT_STATUS_PLANNING,
+        "can_confirm": ready and event.get("status") == EVENT_STATUS_APPROVED,
         "conditions": conditions,
         "outstanding_actions": venue_actions + equipment_actions + programme_actions + task_actions,
         "unfinished_tasks": unfinished,
@@ -263,14 +263,14 @@ def get_readiness(client, user_id, event_id, today=None):
 
 
 def confirm_event(client, user_id, event_id, today=None):
-    """Re-check current readiness, then move a `planning` event to `confirmed`."""
+    """Re-check current readiness, then move an `approved` event to `confirmed`."""
     ensure_coordinator(client, user_id)
     event = _get_assigned_event(client, user_id, event_id)
     readiness = _build_readiness(client, event, today or datetime.now(timezone.utc).date())
 
-    if event.get("status") != EVENT_STATUS_PLANNING:
+    if event.get("status") != EVENT_STATUS_APPROVED:
         raise ReadinessError(
-            f"Only events with status '{EVENT_STATUS_PLANNING}' can be confirmed.", 409, readiness
+            f"Only events with status '{EVENT_STATUS_APPROVED}' can be confirmed.", 409, readiness
         )
     if readiness["readiness"] != READINESS_READY:
         raise ReadinessError(
@@ -282,7 +282,7 @@ def confirm_event(client, user_id, event_id, today=None):
         .update({"status": EVENT_STATUS_CONFIRMED, "updated_at": datetime.now(timezone.utc).isoformat()})
         .eq("event_id", event_id)
         .eq("coordinator_id", user_id)
-        .eq("status", EVENT_STATUS_PLANNING)  # guards against a concurrent status change
+        .eq("status", EVENT_STATUS_APPROVED)  # guards against a concurrent status change
         .execute()
     )
     if not response.data:

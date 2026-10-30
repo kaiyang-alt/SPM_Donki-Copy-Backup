@@ -77,7 +77,7 @@ def submit_review(token, event_id, payload):
         requirement = 'clarification message' if target == 'changes_requested' else 'rejection feedback'
         raise ReviewError(f'A {requirement} is required.')
     event = _event(client, user_id, event_id, coordinator=True)
-    if event.get('status') not in {'requested', 'changes_requested'}:
+    if event.get('status') not in {'requested', 'planning', 'changes_requested'}:
         raise ReviewError('This event is no longer awaiting review.', 409)
 
     action_types = {

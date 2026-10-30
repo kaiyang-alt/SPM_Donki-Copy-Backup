@@ -106,14 +106,14 @@ def technical_context(client, user_id):
     ensure_technical_support(client, user_id)
     events = (client.table("event").select(EVENT_FIELDS)
               .or_("technical_support_required.eq.true,technical_requirements.not.is.null")
-              .in_("status", ["planning", "confirmed"])
+              .in_("status", ["approved", "confirmed"])
               .order("created_at").execute().data or [])
     equipment = (client.table("equipment").select(EQUIPMENT_FIELDS)
                  .eq("active", True).eq("operational_status", "available")
                  .order("name").execute().data or [])
     equipment = [item for item in equipment if item.get("active") is True
                  and item.get("operational_status") == "available"]
-    events = [event for event in events if event.get("status") in {"planning", "confirmed"}
+    events = [event for event in events if event.get("status") in {"approved", "confirmed"}
               and (event.get("technical_support_required") or str(event.get("technical_requirements") or "").strip())]
     return {"events": events, "equipment": equipment}
 
@@ -194,14 +194,14 @@ def list_requests(client, user_id):
             .in_("status", ["requested", "reserved"]).order("requested_at").execute().data or [])
     # Do not silently hide a request whose related event is hidden by RLS.
     details = [_related(client, row) for row in rows]
-    return [item for item in details if item["event"].get("status") in {"planning", "confirmed"}]
+    return [item for item in details if item["event"].get("status") in {"approved", "confirmed"}]
 
 
 def get_request(client, user_id, reservation_id):
     """Reload one request's details under the Technical Support caller's RLS."""
     ensure_technical_support(client, user_id)
     details = _related(client, _request(client, reservation_id))
-    if details["event"].get("status") not in {"planning", "confirmed"}:
+    if details["event"].get("status") not in {"approved", "confirmed"}:
         raise EquipmentError("Coordinator approval is required before Technical Support review.", 409)
     return details
 
@@ -210,8 +210,8 @@ def availability(client, user_id, reservation_id):
     ensure_technical_support(client, user_id)
     row = _request(client, reservation_id)
     details = _related(client, row)
-    if row.get("status") != "requested" or details["event"].get("status") not in {"planning", "confirmed"}:
-        raise EquipmentError("Only requested equipment requests for planning or confirmed events can be accepted.", 409)
+    if row.get("status") != "requested" or details["event"].get("status") not in {"approved", "confirmed"}:
+        raise EquipmentError("Only requested equipment requests for approved or confirmed events can be accepted.", 409)
     quantity = row.get("quantity_suggested")
     if not isinstance(quantity, int) or isinstance(quantity, bool) or quantity <= 0:
         raise EquipmentError("Save a positive suggested quantity before checking availability.", 409)
@@ -229,6 +229,8 @@ def accept_request(client, user_id, reservation_id):
     # saved reservation into a failed confirmation. The RPC decides acceptance.
     details = _related(client, _request(client, reservation_id))
     row = details["reservation"]
+    if row.get("status") != "reserved" and details["event"].get("status") not in {"approved", "confirmed"}:
+        raise EquipmentError("Coordinator approval is required before reserving equipment.", 409)
     if row.get("status") != "reserved" and not _operationally_available(details["equipment"]):
         raise EquipmentError("This equipment is not operationally available for a new reservation.", 409)
     if row.get("status") != "reserved" and not (

@@ -200,3 +200,69 @@ DO $$DECLARE a uuid; b uuid; BEGIN
 END;$$;
 ROLLBACK;
 \echo 'PASS: final RPC transfer 12:29, same venue False, reverse True'
+
+-- Regression: an earlier agreed request in 2029 has no confirmed venue;
+-- it must not break availability or acceptance for a ready event in 2026.
+BEGIN;
+SELECT public.test_equipment_setup(1);
+DELETE FROM public.venue_booking WHERE event_id='30000000-0000-0000-0000-000000000001';
+SET LOCAL ROLE authenticated;
+DO $$DECLARE earlier uuid; candidate uuid; BEGIN
+ PERFORM set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+ SELECT reservation_id INTO earlier FROM public.propose_equipment_quantity(
+   '30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001',1,
+   '2029-02-12 09:00+08','2029-02-12 12:00+08');
+ SELECT reservation_id INTO candidate FROM public.propose_equipment_quantity(
+   '30000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001',1,
+   '2026-11-20 12:30+08','2026-11-20 14:00+08');
+ PERFORM set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
+ PERFORM public.agree_equipment_proposal(earlier,1);
+ PERFORM public.agree_equipment_proposal(candidate,1);
+ PERFORM set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+ -- Skipping an earlier proposal must not bypass the candidate's own venue rule.
+ PERFORM public.test_expect_error(format('SELECT public.cs_equipment_request_available(%L)',earlier),
+   'Exactly one confirmed venue booking is required');
+ PERFORM public.test_expect_error(format('SELECT public.accept_equipment_request(%L)',earlier),
+   'Exactly one confirmed venue booking is required');
+ IF public.cs_equipment_request_available(candidate)<>1 THEN
+   RAISE EXCEPTION 'Venue-less earlier proposal blocked availability';
+ END IF;
+ PERFORM public.accept_equipment_request(candidate);
+ PERFORM public.accept_equipment_request(candidate);
+ IF NOT EXISTS(SELECT 1 FROM public.equipment_reservation
+     WHERE reservation_id=candidate AND status='reserved' AND quantity_suggested=1)
+   OR NOT EXISTS(SELECT 1 FROM public.equipment_reservation
+     WHERE reservation_id=earlier AND status='requested') THEN
+   RAISE EXCEPTION 'Acceptance changed the wrong request';
+ END IF;
+END;$$;
+ROLLBACK;
+\echo 'PASS: earlier agreed proposal without a venue cannot block a ready event; candidate venue and retry checks preserved'
+
+-- A feasible earlier request still has priority over overlapping later demand.
+BEGIN;
+SELECT public.test_equipment_setup(1,'10:00',false);
+SET LOCAL ROLE authenticated;
+DO $$DECLARE earlier uuid; candidate uuid; BEGIN
+ PERFORM set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+ SELECT reservation_id INTO earlier FROM public.propose_equipment_quantity(
+   '30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001',1,
+   '2026-11-20 09:00+08','2026-11-20 12:00+08');
+ SELECT reservation_id INTO candidate FROM public.propose_equipment_quantity(
+   '30000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001',1,
+   '2026-11-20 10:00+08','2026-11-20 14:00+08');
+ PERFORM set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000001',true);
+ PERFORM public.agree_equipment_proposal(earlier,1);
+ PERFORM public.agree_equipment_proposal(candidate,1);
+ PERFORM set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000002',true);
+ IF public.cs_equipment_request_available(candidate)<>0 THEN
+   RAISE EXCEPTION 'Overlapping candidate bypassed earlier feasible request';
+ END IF;
+ PERFORM public.test_expect_error(format('SELECT public.accept_equipment_request(%L)',candidate),
+   'Equipment unavailable, or stock is required for an earlier request');
+ IF EXISTS(SELECT 1 FROM public.equipment_reservation WHERE status='reserved') THEN
+   RAISE EXCEPTION 'Failed acceptance committed stock';
+ END IF;
+END;$$;
+ROLLBACK;
+\echo 'PASS: earlier feasible overlapping request retains stock priority and failure is atomic'
